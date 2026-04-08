@@ -637,7 +637,7 @@ CI builds: `turbo build` runs web build + mobile EAS build in parallel. Type-che
 
 **RLS safety CI gate**: A custom lint/CI step scans all files in `packages/api` and `apps/` for direct queries against `calendar_events` (and equivalent sensitive tables) that bypass the RLS views. Any direct `FROM calendar_events` reference outside of migration files fails the build. This prevents accidental bypassing of the field-masking views.
 
-**Supabase environments**: Single Supabase project using [Supabase environment branching](https://supabase.com/docs/guides/deployment/managing-environments) for dev/staging/prod isolation. Free tier is limited to 3 projects total — separate projects per environment would exhaust that budget. Environment branching is the correct approach: migrations are applied per branch, and each branch gets its own API URL and anon key.
+**Supabase environments**: Single Supabase project (production). Local development uses `supabase start` (Supabase CLI) which runs a full local Postgres + Auth + Realtime stack via Docker. Migrations developed locally, pushed to prod with `supabase db push`. No staging environment — the app is pre-launch and the free tier makes multiple projects impractical.
 
 ---
 
@@ -756,7 +756,7 @@ All architectural open questions are now resolved. Decisions documented below fo
 
 **D-B: Relationship type mismatch on invite** — Bob accepts using Alice's proposed type. No counter-proposal or negotiation UI at invite time. Accept screen shows the proposed type; options are Accept or Decline only. Post-acceptance type changes require both parties to agree via relationship settings. See Invite Accept Flow diagram above.
 
-**D-C: Supabase project structure** — Single Supabase project with environment branching (dev/staging/prod). Free tier limits total to 3 projects; environment branching is the correct approach. See Monorepo Structure section.
+**D-C: Supabase project structure** — Single Supabase project (production only). No dev/staging environments — the app is not yet live to customers and the free tier makes multiple projects impractical. Local development uses the Supabase CLI (`supabase start`) which spins up a full local stack (Postgres + Auth + Realtime) via Docker. Migrations are developed and tested locally, then pushed to production via `supabase db push`. Two `.env` files: `.env.local` (local CLI values) and `.env.production` (prod project URL + anon key).
 
 **D-D: Shopping list Realtime channel granularity** — Shopping list check-off events go on the same `"shared:{uid}"` channel as other meal plan changes. Concurrent check-off is not expected to be a high-frequency problem at MVP scale. Re-evaluate at beta if contention is observed.
 
