@@ -96,14 +96,14 @@ Applied per-person, per-resource:
 
 | Relationship Type | Calendar Default | Tasks Default | Meals Default |
 |---|---|---|---|
-| Nesting partner | Full | Full | Full |
-| Partner | Full | Free/Busy | Free/Busy |
+| Nesting partner | Free/Busy | Free/Busy | Free/Busy |
+| Partner | Free/Busy | Free/Busy | Free/Busy |
 | Metamour | None | None | None |
-| Roommate | Free/Busy | Free/Busy | Full |
-| Family | Free/Busy | None | None |
-| Custom | None | None | None |
+| Roommate | Free/Busy | Free/Busy | Free/Busy |
+| Family | Free/Busy | Free/Busy | Free/Busy |
+| Custom | Free/Busy | Free/Busy | Free/Busy |
 
-Defaults are editable per-person by the user. Changes affect only the relationship from the user's side (permissions are unilateral — I control what I share with you; you control what you share with me).
+All direct relationships default to Free/Busy regardless of type. Full access is available but must be actively chosen by each person independently — there is no automatic or type-based grant of Full visibility. Two people reach Full access by each individually choosing to grant it; the model remains unilateral (I control what I share with you; you control what you share with me).
 
 ### Two-Layer Coordination Model
 
@@ -381,6 +381,9 @@ Web and mobile are equal-priority deliverables. Neither is "later."
 
 **D5: Push notifications**
 **Decision**: DEFERRED. In-app real-time sync only for MVP. Supabase transactional emails (invite notifications, relationship requests) are the only async channel. Documented as a known limitation; push notifications are future scope.
+
+**D6: Permission defaults**
+**Decision**: All direct relationships default to Free/Busy for all resource types (calendar, tasks, meals), regardless of relationship type. Full access is not granted automatically — each person must independently choose to upgrade their grant. The model remains unilateral throughout.
 
 ---
 
