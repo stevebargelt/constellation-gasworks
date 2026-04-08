@@ -639,6 +639,8 @@ CI builds: `turbo build` runs web build + mobile EAS build in parallel. Type-che
 
 **Supabase environments**: Single Supabase project (production). Local development uses `supabase start` (Supabase CLI) which runs a full local Postgres + Auth + Realtime stack via Docker. Migrations developed locally, pushed to prod with `supabase db push`. No staging environment — the app is pre-launch and the free tier makes multiple projects impractical.
 
+**Supabase API key**: Use the publishable key (`sb_publishable_xxx`, found in the API Keys tab) — not the legacy `anon` key. Environment variable: `SUPABASE_PUBLISHABLE_KEY`.
+
 ---
 
 ## Auth Flow Design
