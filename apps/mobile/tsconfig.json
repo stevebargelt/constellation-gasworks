@@ -1,0 +1,13 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@constellation/types": ["../../packages/types/src/index.ts"],
+      "@constellation/api": ["../../packages/api/src/index.ts"],
+      "@constellation/hooks": ["../../packages/hooks/src/index.ts"],
+      "@constellation/utils": ["../../packages/utils/src/index.ts"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.d.ts", "expo-env.d.ts"]
+}

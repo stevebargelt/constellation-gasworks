@@ -3,3 +3,21 @@
 .dolt/
 *.db
 .beads-credential-key
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Turbo
+.turbo/
+
+# Expo
+.expo/
+
+# Environment
+.env
+.env.local
+.env.*.local
