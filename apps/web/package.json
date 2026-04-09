@@ -13,6 +13,7 @@
   "dependencies": {
     "@constellation/api": "workspace:*",
     "@constellation/hooks": "workspace:*",
+    "@constellation/theme": "workspace:*",
     "@constellation/types": "workspace:*",
     "@constellation/utils": "workspace:*",
     "react": "^18.3.1",
