@@ -25,6 +25,9 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.button} onPress={() => router.push("/tasks")}>
             <Text style={styles.buttonText}>Tasks</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.button} onPress={() => router.push("/recipes")}>
+            <Text style={styles.buttonText}>Recipes</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.button} onPress={() => router.push("/invites")}>
             <Text style={styles.buttonText}>Invites</Text>
           </TouchableOpacity>
