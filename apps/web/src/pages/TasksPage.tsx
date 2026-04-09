@@ -10,7 +10,7 @@ import {
 } from "@constellation/api";
 import type { Task, TaskList, TaskListMember, TaskStatus, User, UserColor } from "@constellation/types";
 
-const STATUS_ORDER: TaskStatus[] = ["todo", "in_progress", "complete"];
+const ACTIVE_STATUSES: TaskStatus[] = ["todo", "in_progress"];
 const STATUS_LABEL: Record<TaskStatus, string> = {
   todo: "To do",
   in_progress: "In progress",
@@ -22,15 +22,18 @@ const STATUS_STYLE: Record<TaskStatus, string> = {
   complete: "bg-green-900 text-green-300",
 };
 
-// ---------- helpers ----------
-
 function nextStatus(s: TaskStatus): TaskStatus {
-  const idx = STATUS_ORDER.indexOf(s);
-  return STATUS_ORDER[(idx + 1) % STATUS_ORDER.length];
+  const cycle: Record<TaskStatus, TaskStatus> = {
+    todo: "in_progress",
+    in_progress: "complete",
+    complete: "todo",
+  };
+  return cycle[s];
 }
 
-function partnerIdOf(rel: { user_a_id: string; user_b_id: string }, myId: string): string {
-  return rel.user_a_id === myId ? rel.user_b_id : rel.user_a_id;
+function formatDate(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 // ---------- CreateTaskForm ----------
@@ -61,7 +64,6 @@ function CreateTaskForm({
   const [isPrivate, setIsPrivate] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Assignee options: self + list members who are direct partners
   const assigneeOptions = useMemo(() => {
     const options: { id: string; label: string }[] = [
       { id: currentUserId, label: "Me" },
@@ -166,7 +168,7 @@ function CreateTaskForm({
   );
 }
 
-// ---------- TaskRow ----------
+// ---------- TaskRow (active tasks) ----------
 
 interface TaskRowProps {
   task: Task;
@@ -309,7 +311,7 @@ function TaskRow({
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <p className={`text-sm font-medium ${task.status === "complete" ? "line-through text-gray-500" : "text-white"}`}>
+        <p className="text-sm font-medium text-white">
           {task.title}
           {task.is_private && <span className="ml-1 text-xs text-gray-500">🔒</span>}
         </p>
@@ -353,7 +355,73 @@ function TaskRow({
   );
 }
 
+// ---------- HistoryRow (completed tasks) ----------
+
+interface HistoryRowProps {
+  task: Task;
+  currentUserId: string;
+  userMap: Map<string, User>;
+  colorMap: Map<string, string>;
+  onReopen: (id: string) => Promise<void>;
+}
+
+function HistoryRow({ task, currentUserId, userMap, colorMap, onReopen }: HistoryRowProps) {
+  const [reopening, setReopening] = useState(false);
+
+  const assigneeName = task.assignee_id
+    ? task.assignee_id === currentUserId
+      ? "Me"
+      : userMap.get(task.assignee_id)?.display_name ?? task.assignee_id.slice(0, 8)
+    : null;
+  const assigneeColor = task.assignee_id ? colorMap.get(task.assignee_id) : undefined;
+
+  const handleReopen = async () => {
+    setReopening(true);
+    await onReopen(task.id);
+    setReopening(false);
+  };
+
+  return (
+    <div className="bg-gray-800/60 rounded-lg p-3 flex items-start gap-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-500 line-through">
+          {task.title}
+          {task.is_private && <span className="ml-1 text-xs">🔒</span>}
+        </p>
+        {task.description && (
+          <p className="text-xs text-gray-600 mt-0.5 truncate">{task.description}</p>
+        )}
+        <div className="flex items-center gap-3 mt-1 flex-wrap">
+          {task.completed_at && (
+            <span className="text-xs text-gray-500">
+              Completed {formatDate(task.completed_at)}
+            </span>
+          )}
+          {assigneeName && (
+            <span className="flex items-center gap-1 text-xs text-gray-500">
+              <span
+                className="inline-block w-3 h-3 rounded-full shrink-0 opacity-60"
+                style={{ backgroundColor: assigneeColor ?? "#6b7280" }}
+              />
+              {assigneeName}
+            </span>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={handleReopen}
+        disabled={reopening}
+        className="shrink-0 text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50"
+      >
+        {reopening ? "…" : "Reopen"}
+      </button>
+    </div>
+  );
+}
+
 // ---------- TasksPage ----------
+
+type Tab = "active" | "history";
 
 export default function TasksPage() {
   const { id: taskListId } = useParams<{ id: string }>();
@@ -366,11 +434,11 @@ export default function TasksPage() {
   const [colorMap, setColorMap] = useState<Map<string, string>>(new Map());
   const [partnerIds, setPartnerIds] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
+  const [tab, setTab] = useState<Tab>("active");
 
   useEffect(() => {
     if (!taskListId || !user) return;
 
-    // Load task list metadata, members, and user details
     Promise.all([
       getTaskList(taskListId),
       getTaskListMembers(taskListId),
@@ -406,11 +474,29 @@ export default function TasksPage() {
     remove(id);
   };
 
-  const grouped = useMemo(() => {
-    const map: Record<TaskStatus, Task[]> = { todo: [], in_progress: [], complete: [] };
-    tasks.forEach((t) => map[t.status].push(t));
-    return map;
+  const handleReopen = async (id: string) => {
+    await setStatus(id, "todo");
+  };
+
+  const { activeTasks, completedTasks } = useMemo(() => {
+    const activeTasks: Record<TaskStatus, Task[]> = { todo: [], in_progress: [], complete: [] };
+    const completedTasks: Task[] = [];
+    tasks.forEach((t) => {
+      if (t.status === "complete") {
+        completedTasks.push(t);
+      } else {
+        activeTasks[t.status].push(t);
+      }
+    });
+    completedTasks.sort((a, b) => {
+      const aTime = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+      const bTime = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+      return bTime - aTime;
+    });
+    return { activeTasks, completedTasks };
   }, [tasks]);
+
+  const completedCount = completedTasks.length;
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
@@ -421,7 +507,7 @@ export default function TasksPage() {
             {taskList?.title ?? "Tasks"}
           </h1>
         </div>
-        {!showCreate && (
+        {tab === "active" && !showCreate && (
           <button
             onClick={() => setShowCreate(true)}
             className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded text-white"
@@ -431,50 +517,95 @@ export default function TasksPage() {
         )}
       </div>
 
-      {showCreate && (
-        <CreateTaskForm
-          taskListId={taskListId!}
-          currentUserId={user?.id ?? ""}
-          listMembers={listMembers}
-          partnerIds={partnerIds}
-          userMap={userMap}
-          onSave={async (task) => { await create(task); setShowCreate(false); }}
-          onCancel={() => setShowCreate(false)}
-        />
-      )}
+      {/* Tab toggle */}
+      <div className="flex border-b border-gray-800">
+        <button
+          onClick={() => setTab("active")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            tab === "active"
+              ? "border-indigo-500 text-white"
+              : "border-transparent text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          Active
+        </button>
+        <button
+          onClick={() => setTab("history")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            tab === "history"
+              ? "border-indigo-500 text-white"
+              : "border-transparent text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          History {completedCount > 0 && <span className="ml-1 text-xs text-gray-500">({completedCount})</span>}
+        </button>
+      </div>
 
       {loading ? (
         <p className="text-gray-400 text-sm">Loading…</p>
-      ) : tasks.length === 0 && !showCreate ? (
-        <p className="text-gray-500 text-sm">No tasks yet. Add one to get started.</p>
+      ) : tab === "active" ? (
+        <>
+          {showCreate && (
+            <CreateTaskForm
+              taskListId={taskListId!}
+              currentUserId={user?.id ?? ""}
+              listMembers={listMembers}
+              partnerIds={partnerIds}
+              userMap={userMap}
+              onSave={async (task) => { await create(task); setShowCreate(false); }}
+              onCancel={() => setShowCreate(false)}
+            />
+          )}
+          {ACTIVE_STATUSES.every((s) => activeTasks[s].length === 0) && !showCreate ? (
+            <p className="text-gray-500 text-sm">No active tasks. Add one or check History.</p>
+          ) : (
+            ACTIVE_STATUSES.map((status) => {
+              const group = activeTasks[status];
+              if (group.length === 0) return null;
+              return (
+                <div key={status}>
+                  <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                    {STATUS_LABEL[status]} ({group.length})
+                  </h2>
+                  <div className="space-y-2">
+                    {group.map((task) => (
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        currentUserId={user?.id ?? ""}
+                        listMembers={listMembers}
+                        partnerIds={partnerIds}
+                        userMap={userMap}
+                        colorMap={colorMap}
+                        onSetStatus={setStatus}
+                        onUpdate={update}
+                        onRemove={handleDelete}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </>
       ) : (
-        STATUS_ORDER.map((status) => {
-          const group = grouped[status];
-          if (group.length === 0) return null;
-          return (
-            <div key={status}>
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                {STATUS_LABEL[status]} ({group.length})
-              </h2>
-              <div className="space-y-2">
-                {group.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    currentUserId={user?.id ?? ""}
-                    listMembers={listMembers}
-                    partnerIds={partnerIds}
-                    userMap={userMap}
-                    colorMap={colorMap}
-                    onSetStatus={setStatus}
-                    onUpdate={update}
-                    onRemove={handleDelete}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })
+        /* History tab */
+        completedTasks.length === 0 ? (
+          <p className="text-gray-500 text-sm">No completed tasks yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {completedTasks.map((task) => (
+              <HistoryRow
+                key={task.id}
+                task={task}
+                currentUserId={user?.id ?? ""}
+                userMap={userMap}
+                colorMap={colorMap}
+                onReopen={handleReopen}
+              />
+            ))}
+          </div>
+        )
       )}
     </div>
   );

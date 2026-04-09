@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,9 @@ import {
   Modal,
   Switch,
   ScrollView,
+  Animated,
 } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth, useTasks } from "@constellation/hooks";
 import {
@@ -24,7 +26,7 @@ import {
 import type { Task, TaskList, TaskListMember, TaskStatus, User, UserColor } from "@constellation/types";
 import { theme } from "../../src/theme";
 
-const STATUS_ORDER: TaskStatus[] = ["todo", "in_progress", "complete"];
+const ACTIVE_STATUSES: TaskStatus[] = ["todo", "in_progress"];
 const STATUS_LABEL: Record<TaskStatus, string> = {
   todo: "To do",
   in_progress: "In progress",
@@ -32,8 +34,17 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 };
 
 function nextStatus(s: TaskStatus): TaskStatus {
-  const idx = STATUS_ORDER.indexOf(s);
-  return STATUS_ORDER[(idx + 1) % STATUS_ORDER.length];
+  const cycle: Record<TaskStatus, TaskStatus> = {
+    todo: "in_progress",
+    in_progress: "complete",
+    complete: "todo",
+  };
+  return cycle[s];
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function partnerIdOf(rel: { user_a_id: string; user_b_id: string }, myId: string): string {
@@ -184,7 +195,22 @@ function TaskFormModal({
   );
 }
 
-// ---------- TaskItem ----------
+// ---------- SwipeCompleteAction ----------
+
+function SwipeCompleteAction(_progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) {
+  const scale = dragX.interpolate({
+    inputRange: [-80, 0],
+    outputRange: [1, 0.5],
+    extrapolate: "clamp",
+  });
+  return (
+    <View style={swipe.action}>
+      <Animated.Text style={[swipe.actionText, { transform: [{ scale }] }]}>Done ✓</Animated.Text>
+    </View>
+  );
+}
+
+// ---------- TaskItem (active, swipeable) ----------
 
 interface TaskItemProps {
   task: Task;
@@ -197,63 +223,134 @@ interface TaskItemProps {
 }
 
 function TaskItem({ task, currentUserId, userMap, colorMap, onSetStatus, onEdit, onDelete }: TaskItemProps) {
+  const swipeableRef = useRef<Swipeable>(null);
+
   const assigneeName = task.assignee_id
     ? task.assignee_id === currentUserId
       ? "Me"
       : userMap.get(task.assignee_id)?.display_name ?? task.assignee_id.slice(0, 8)
     : null;
   const assigneeColor = task.assignee_id ? colorMap.get(task.assignee_id) : undefined;
-  const isComplete = task.status === "complete";
+
+  const handleSwipeComplete = () => {
+    swipeableRef.current?.close();
+    onSetStatus(task.id, "complete");
+  };
 
   return (
-    <View style={styles.taskCard}>
-      <TouchableOpacity
-        style={styles.statusBtn}
-        onPress={() => onSetStatus(task.id, nextStatus(task.status))}
-      >
-        <Text style={[
-          styles.statusBadge,
-          task.status === "complete" && styles.statusComplete,
-          task.status === "in_progress" && styles.statusInProgress,
-        ]}>
-          {STATUS_LABEL[task.status]}
-        </Text>
-      </TouchableOpacity>
+    <Swipeable
+      ref={swipeableRef}
+      renderRightActions={SwipeCompleteAction}
+      onSwipeableRightOpen={handleSwipeComplete}
+      rightThreshold={60}
+    >
+      <View style={styles.taskCard}>
+        <TouchableOpacity
+          style={styles.statusBtn}
+          onPress={() => onSetStatus(task.id, nextStatus(task.status))}
+        >
+          <Text style={[
+            styles.statusBadge,
+            task.status === "in_progress" && styles.statusInProgress,
+          ]}>
+            {STATUS_LABEL[task.status]}
+          </Text>
+        </TouchableOpacity>
 
+        <View style={styles.taskContent}>
+          <Text style={styles.taskTitle}>
+            {task.title}
+            {task.is_private && "  🔒"}
+          </Text>
+          {task.description ? (
+            <Text style={styles.taskDesc} numberOfLines={1}>{task.description}</Text>
+          ) : null}
+          <View style={styles.taskMeta}>
+            {task.due_date && (
+              <Text style={styles.dueDateChip}>Due {task.due_date}</Text>
+            )}
+            {assigneeName && (
+              <View style={styles.assigneeRow}>
+                <View style={[styles.colorDot, { backgroundColor: assigneeColor ?? "#6b7280" }]} />
+                <Text style={styles.assigneeName}>{assigneeName}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.taskActions}>
+          <TouchableOpacity onPress={() => onEdit(task)} hitSlop={8}>
+            <Text style={styles.actionEdit}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => onDelete(task)} hitSlop={8}>
+            <Text style={styles.actionDelete}>Del</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Swipeable>
+  );
+}
+
+// ---------- HistoryItem (completed task) ----------
+
+interface HistoryItemProps {
+  task: Task;
+  currentUserId: string;
+  userMap: Map<string, User>;
+  colorMap: Map<string, string>;
+  onReopen: (id: string) => Promise<void>;
+}
+
+function HistoryItem({ task, currentUserId, userMap, colorMap, onReopen }: HistoryItemProps) {
+  const [reopening, setReopening] = useState(false);
+
+  const assigneeName = task.assignee_id
+    ? task.assignee_id === currentUserId
+      ? "Me"
+      : userMap.get(task.assignee_id)?.display_name ?? task.assignee_id.slice(0, 8)
+    : null;
+  const assigneeColor = task.assignee_id ? colorMap.get(task.assignee_id) : undefined;
+
+  const handleReopen = async () => {
+    setReopening(true);
+    await onReopen(task.id);
+    setReopening(false);
+  };
+
+  return (
+    <View style={[styles.taskCard, historyStyles.card]}>
       <View style={styles.taskContent}>
-        <Text style={[styles.taskTitle, isComplete && styles.taskTitleDone]}>
+        <Text style={historyStyles.title}>
           {task.title}
           {task.is_private && "  🔒"}
         </Text>
         {task.description ? (
-          <Text style={styles.taskDesc} numberOfLines={1}>{task.description}</Text>
+          <Text style={[styles.taskDesc, historyStyles.desc]} numberOfLines={1}>{task.description}</Text>
         ) : null}
         <View style={styles.taskMeta}>
-          {task.due_date && (
-            <Text style={styles.dueDateChip}>Due {task.due_date}</Text>
+          {task.completed_at && (
+            <Text style={historyStyles.meta}>Completed {formatDate(task.completed_at)}</Text>
           )}
           {assigneeName && (
             <View style={styles.assigneeRow}>
-              <View style={[styles.colorDot, { backgroundColor: assigneeColor ?? "#6b7280" }]} />
-              <Text style={styles.assigneeName}>{assigneeName}</Text>
+              <View style={[styles.colorDot, { backgroundColor: assigneeColor ?? "#6b7280", opacity: 0.6 }]} />
+              <Text style={historyStyles.meta}>{assigneeName}</Text>
             </View>
           )}
         </View>
       </View>
-
-      <View style={styles.taskActions}>
-        <TouchableOpacity onPress={() => onEdit(task)} hitSlop={8}>
-          <Text style={styles.actionEdit}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => onDelete(task)} hitSlop={8}>
-          <Text style={styles.actionDelete}>Del</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity onPress={handleReopen} disabled={reopening} hitSlop={8}>
+        <Text style={[historyStyles.reopenBtn, reopening && { opacity: 0.5 }]}>
+          {reopening ? "…" : "Reopen"}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 // ---------- Main Screen ----------
+
+type Tab = "active" | "history";
 
 export default function TaskListDetailScreen() {
   const { id: taskListId } = useLocalSearchParams<{ id: string }>();
@@ -268,6 +365,7 @@ export default function TaskListDetailScreen() {
   const [partnerIds, setPartnerIds] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [tab, setTab] = useState<Tab>("active");
 
   useEffect(() => {
     if (!taskListId || !user) return;
@@ -313,59 +411,116 @@ export default function TaskListDetailScreen() {
     ]);
   };
 
-  const grouped = useMemo(() => {
-    const map: Record<TaskStatus, Task[]> = { todo: [], in_progress: [], complete: [] };
-    tasks.forEach((t) => map[t.status].push(t));
-    return map;
+  const handleReopen = async (id: string) => {
+    await setStatus(id, "todo");
+  };
+
+  const { activeSections, completedTasks } = useMemo(() => {
+    const grouped: Record<TaskStatus, Task[]> = { todo: [], in_progress: [], complete: [] };
+    tasks.forEach((t) => grouped[t.status].push(t));
+
+    const activeSections = ACTIVE_STATUSES.flatMap((status) => {
+      const group = grouped[status];
+      if (group.length === 0) return [];
+      return [{ status, items: group }];
+    });
+
+    const completedTasks = [...grouped.complete].sort((a, b) => {
+      const aTime = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+      const bTime = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    return { activeSections, completedTasks };
   }, [tasks]);
 
-  const sections = STATUS_ORDER.flatMap((status) => {
-    const group = grouped[status];
-    if (group.length === 0) return [];
-    return [{ status, items: group }];
-  });
+  const completedCount = completedTasks.length;
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.push("/tasks" as never)}>
           <Text style={styles.back}>← Lists</Text>
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>{taskList?.title ?? "Tasks"}</Text>
-        <TouchableOpacity onPress={() => { setEditingTask(null); setModalOpen(true); }}>
-          <Text style={styles.addBtn}>+ Add</Text>
+        {tab === "active" ? (
+          <TouchableOpacity onPress={() => { setEditingTask(null); setModalOpen(true); }}>
+            <Text style={styles.addBtn}>+ Add</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 40 }} />
+        )}
+      </View>
+
+      {/* Tab bar */}
+      <View style={tabBar.container}>
+        <TouchableOpacity
+          style={[tabBar.tab, tab === "active" && tabBar.tabActive]}
+          onPress={() => setTab("active")}
+        >
+          <Text style={[tabBar.tabText, tab === "active" && tabBar.tabTextActive]}>Active</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[tabBar.tab, tab === "history" && tabBar.tabActive]}
+          onPress={() => setTab("history")}
+        >
+          <Text style={[tabBar.tabText, tab === "history" && tabBar.tabTextActive]}>
+            History{completedCount > 0 ? ` (${completedCount})` : ""}
+          </Text>
         </TouchableOpacity>
       </View>
 
       {loading ? (
         <ActivityIndicator color={theme.colors.primary[400]} style={{ marginTop: 40 }} />
-      ) : tasks.length === 0 ? (
-        <Text style={styles.emptyText}>No tasks yet. Add one!</Text>
+      ) : tab === "active" ? (
+        activeSections.length === 0 ? (
+          <Text style={styles.emptyText}>No active tasks. Add one or check History.</Text>
+        ) : (
+          <FlatList
+            data={activeSections}
+            keyExtractor={(s) => s.status}
+            contentContainerStyle={{ padding: 16, gap: 16 }}
+            renderItem={({ item: section }) => (
+              <View>
+                <Text style={styles.sectionHeader}>
+                  {STATUS_LABEL[section.status]} ({section.items.length})
+                </Text>
+                {section.items.map((task) => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    currentUserId={user?.id ?? ""}
+                    userMap={userMap}
+                    colorMap={colorMap}
+                    onSetStatus={setStatus}
+                    onEdit={(t) => { setEditingTask(t); setModalOpen(true); }}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </View>
+            )}
+          />
+        )
       ) : (
-        <FlatList
-          data={sections}
-          keyExtractor={(s) => s.status}
-          contentContainerStyle={{ padding: 16, gap: 16 }}
-          renderItem={({ item: section }) => (
-            <View>
-              <Text style={styles.sectionHeader}>
-                {STATUS_LABEL[section.status]} ({section.items.length})
-              </Text>
-              {section.items.map((task) => (
-                <TaskItem
-                  key={task.id}
-                  task={task}
-                  currentUserId={user?.id ?? ""}
-                  userMap={userMap}
-                  colorMap={colorMap}
-                  onSetStatus={setStatus}
-                  onEdit={(t) => { setEditingTask(t); setModalOpen(true); }}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </View>
-          )}
-        />
+        completedTasks.length === 0 ? (
+          <Text style={styles.emptyText}>No completed tasks yet.</Text>
+        ) : (
+          <FlatList
+            data={completedTasks}
+            keyExtractor={(t) => t.id}
+            contentContainerStyle={{ padding: 16, gap: 8 }}
+            renderItem={({ item: task }) => (
+              <HistoryItem
+                task={task}
+                currentUserId={user?.id ?? ""}
+                userMap={userMap}
+                colorMap={colorMap}
+                onReopen={handleReopen}
+              />
+            )}
+          />
+        )
       )}
 
       <TaskFormModal
@@ -426,11 +581,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: "hidden",
   },
-  statusComplete: { backgroundColor: theme.colors.success?.[900] ?? "#14532d", color: theme.colors.success?.[300] ?? "#86efac" },
   statusInProgress: { backgroundColor: theme.colors.warning?.[900] ?? "#422006", color: theme.colors.warning?.[300] ?? "#fcd34d" },
   taskContent: { flex: 1 },
   taskTitle: { color: theme.colors.neutral[50], fontSize: 14, fontWeight: "600" },
-  taskTitleDone: { textDecorationLine: "line-through", color: theme.colors.neutral[500] },
   taskDesc: { color: theme.colors.neutral[400], fontSize: 12, marginTop: 2 },
   taskMeta: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
   dueDateChip: {
@@ -447,6 +600,54 @@ const styles = StyleSheet.create({
   taskActions: { gap: 6 },
   actionEdit: { color: theme.colors.neutral[400], fontSize: 12 },
   actionDelete: { color: theme.colors.error[400], fontSize: 12 },
+});
+
+const swipe = StyleSheet.create({
+  action: {
+    backgroundColor: theme.colors.success?.[600] ?? "#16a34a",
+    justifyContent: "center",
+    alignItems: "flex-end",
+    paddingHorizontal: 20,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: 8,
+    minWidth: 80,
+  },
+  actionText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+});
+
+const tabBar = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.neutral[800],
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  tabActive: { borderBottomColor: theme.colors.primary[500] },
+  tabText: { color: theme.colors.neutral[500], fontSize: 13, fontWeight: "600" },
+  tabTextActive: { color: theme.colors.neutral[50] },
+});
+
+const historyStyles = StyleSheet.create({
+  card: { backgroundColor: theme.colors.neutral[900] },
+  title: {
+    color: theme.colors.neutral[500],
+    fontSize: 14,
+    fontWeight: "600",
+    textDecorationLine: "line-through",
+  },
+  desc: { color: theme.colors.neutral[600] },
+  meta: { color: theme.colors.neutral[600], fontSize: 11 },
+  reopenBtn: { color: theme.colors.primary[400], fontSize: 12, fontWeight: "600" },
 });
 
 const modal = StyleSheet.create({
