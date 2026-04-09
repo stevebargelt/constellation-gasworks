@@ -40,6 +40,7 @@ export interface RelationshipPermission {
 
 export interface LivingSpace {
   id: string;
+  creator_id: string | null;
   name: string;
   address: string | null;
   created_at: string;
