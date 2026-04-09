@@ -1,7 +1,7 @@
-import { useMemo } from "react";
-import type { Relationship, User } from "@constellation/types";
+import { useEffect, useMemo, useState } from "react";
+import type { Relationship, User, UserColor } from "@constellation/types";
 import { detectPolyclueClusters } from "@constellation/utils";
-import { colors } from "@constellation/theme";
+import { getUserColors } from "@constellation/api";
 import { useRelationships } from "./useRelationships";
 
 interface GraphNode {
@@ -20,13 +20,27 @@ interface ConstellationGraph {
   nodes: GraphNode[];
   edges: GraphEdge[];
   clusters: Map<string, string[]>;
+  /** Maps target_user_id → hex color string for the current viewer. */
   userColors: Map<string, string>;
   loading: boolean;
   error: Error | null;
 }
 
-export function useConstellationGraph(users: User[]): ConstellationGraph {
-  const { relationships, loading, error } = useRelationships();
+export function useConstellationGraph(
+  users: User[]
+): ConstellationGraph {
+  const { relationships, loading: relLoading, error: relError } = useRelationships();
+  const [colorRows, setColorRows] = useState<UserColor[]>([]);
+  const [colorsLoading, setColorsLoading] = useState(true);
+  const [colorsError, setColorsError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    setColorsLoading(true);
+    getUserColors()
+      .then(setColorRows)
+      .catch((e) => setColorsError(e instanceof Error ? e : new Error(String(e))))
+      .finally(() => setColorsLoading(false));
+  }, []);
 
   const clusters = useMemo(() => {
     if (!relationships.length || !users.length) return new Map<string, string[]>();
@@ -48,13 +62,20 @@ export function useConstellationGraph(users: User[]): ConstellationGraph {
       .map((r) => ({ source: r.user_a_id, target: r.user_b_id, relationship: r }));
   }, [relationships]);
 
-  // Assign a stable color from the person palette to each user by index.
-  // Sorted by user ID for determinism across renders/sessions.
   const userColors = useMemo<Map<string, string>>(() => {
-    const palette = colors.person as readonly string[];
-    const sorted = [...users].sort((a, b) => a.id.localeCompare(b.id));
-    return new Map(sorted.map((user, i) => [user.id, palette[i % palette.length]]));
-  }, [users]);
+    const map = new Map<string, string>();
+    for (const row of colorRows) {
+      map.set(row.target_user_id, row.color);
+    }
+    return map;
+  }, [colorRows]);
 
-  return { nodes, edges, clusters, userColors, loading, error };
+  return {
+    nodes,
+    edges,
+    clusters,
+    userColors,
+    loading: relLoading || colorsLoading,
+    error: relError ?? colorsError,
+  };
 }

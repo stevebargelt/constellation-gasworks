@@ -159,6 +159,14 @@ export interface MealPlanDay {
   free_text: string | null;
 }
 
+export interface UserColor {
+  id: string;
+  viewer_id: string;
+  target_user_id: string;
+  color: string;
+  created_at: string;
+}
+
 export interface ShoppingListItem {
   id: string;
   meal_plan_id: string;
