@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TaskList } from "@constellation/types";
 import {
   supabase,
@@ -25,6 +25,7 @@ export function useTaskLists(): TaskListsState {
   const [taskLists, setTaskLists] = useState<TaskList[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const uidRef = useRef<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -37,23 +38,68 @@ export function useTaskLists(): TaskListsState {
   useEffect(() => {
     load();
 
-    // Subscribe to Realtime changes on task_lists and task_list_members.
-    // RLS ensures only rows visible to auth.uid() are returned on refetch.
-    const channel = supabase
-      .channel("task-lists-own")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "task_lists" },
-        () => { load(); }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "task_list_members" },
-        () => { load(); }
-      )
-      .subscribe();
+    let sharedChannel: ReturnType<typeof supabase.channel> | null = null;
 
-    return () => { supabase.removeChannel(channel); };
+    // Resolve the current user's uid to build the shared:{uid} channel name
+    // per the architecture channel convention.
+    // RLS on task_lists / task_list_members ensures only rows visible to
+    // auth.uid() are returned on each reconcile fetch.
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      uidRef.current = user.id;
+      const uid = user.id;
+
+      // shared:{uid} — task lists the user owns or is a member of,
+      // and the membership table that controls access.
+      sharedChannel = supabase
+        .channel(`shared:${uid}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "task_lists" },
+          (payload) => {
+            const newList = payload.new as TaskList;
+            setTaskLists((prev) => {
+              if (prev.some((l) => l.id === newList.id)) return prev;
+              return [...prev, newList];
+            });
+            load();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "task_lists" },
+          (payload) => {
+            const updated = payload.new as TaskList;
+            setTaskLists((prev) =>
+              prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l))
+            );
+            load();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "DELETE", schema: "public", table: "task_lists" },
+          (payload) => {
+            const deleted = payload.old as { id: string };
+            setTaskLists((prev) => prev.filter((l) => l.id !== deleted.id));
+            load();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "task_list_members" },
+          () => {
+            // Membership changes (added to / removed from a list) require
+            // a full reload so the list of visible task lists stays accurate.
+            load();
+          }
+        )
+        .subscribe();
+    });
+
+    return () => {
+      if (sharedChannel) supabase.removeChannel(sharedChannel);
+    };
   }, [load]);
 
   const create = async (title: string): Promise<TaskList | null> => {

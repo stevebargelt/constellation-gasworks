@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Task, TaskStatus } from "@constellation/types";
 import { supabase, createTask, deleteTask, getTasks, updateTask } from "@constellation/api";
 
@@ -17,6 +17,7 @@ export function useTasks(taskListId: string): TasksState {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const uidRef = useRef<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -29,23 +30,94 @@ export function useTasks(taskListId: string): TasksState {
   useEffect(() => {
     load();
 
-    // Subscribe to Realtime changes for this task list.
-    // Filter by task_list_id so updates from other lists don't trigger reloads.
-    const channel = supabase
-      .channel(`tasks-list-${taskListId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "tasks",
-          filter: `task_list_id=eq.${taskListId}`,
-        },
-        () => { load(); }
-      )
-      .subscribe();
+    let sharedChannel: ReturnType<typeof supabase.channel> | null = null;
+    let userChannel: ReturnType<typeof supabase.channel> | null = null;
 
-    return () => { supabase.removeChannel(channel); };
+    // Resolve the current user's uid to build user-specific channel names
+    // per the architecture channel convention (user:{uid} / shared:{uid}).
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      uidRef.current = user.id;
+      const uid = user.id;
+
+      // shared:{uid} — tasks in this specific task list.
+      // Filter to task_list_id so only relevant changes trigger reconcile.
+      // Optimistic update applied from payload; load() reconciles server state.
+      sharedChannel = supabase
+        .channel(`shared:${uid}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "tasks",
+            filter: `task_list_id=eq.${taskListId}`,
+          },
+          (payload) => {
+            const newTask = payload.new as Task;
+            setTasks((prev) => {
+              if (prev.some((t) => t.id === newTask.id)) return prev;
+              return [...prev, newTask];
+            });
+            load();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "tasks",
+            filter: `task_list_id=eq.${taskListId}`,
+          },
+          (payload) => {
+            const updated = payload.new as Task;
+            setTasks((prev) =>
+              prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+            );
+            load();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "DELETE",
+            schema: "public",
+            table: "tasks",
+            filter: `task_list_id=eq.${taskListId}`,
+          },
+          (payload) => {
+            const deleted = payload.old as { id: string };
+            setTasks((prev) => prev.filter((t) => t.id !== deleted.id));
+            load();
+          }
+        )
+        .subscribe();
+
+      // user:{uid} — tasks assigned to the current user across all lists.
+      // Catches assignee changes (task assigned to / unassigned from me)
+      // that may affect visibility in this list view; triggers reconcile.
+      userChannel = supabase
+        .channel(`user:${uid}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "tasks",
+            filter: `assignee_id=eq.${uid}`,
+          },
+          () => {
+            load();
+          }
+        )
+        .subscribe();
+    });
+
+    return () => {
+      if (sharedChannel) supabase.removeChannel(sharedChannel);
+      if (userChannel) supabase.removeChannel(userChannel);
+    };
   }, [load, taskListId]);
 
   const create = async (task: Omit<Task, "id" | "creator_id" | "completed_at" | "updated_at">) => {
@@ -77,7 +149,7 @@ export function useTasks(taskListId: string): TasksState {
           : t
       )
     );
-    // Persist to server; Realtime will reconcile any drift
+    // Persist to server; Realtime shared:{uid} channel will reconcile any drift
     await updateTask(id, {
       status,
       completed_at: status === "complete" ? now : null,
