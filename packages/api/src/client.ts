@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClientOptions } from "@supabase/supabase-js";
 
 let _client: SupabaseClient | null = null;
 
@@ -6,11 +7,15 @@ let _client: SupabaseClient | null = null;
  * Initialize the Supabase client. Call this once at app startup
  * before using any API functions.
  *
- * Web:    initSupabase(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY)
- * Mobile: initSupabase(process.env.EXPO_PUBLIC_SUPABASE_URL, process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY)
+ * Web:    initSupabase(url, key)
+ * Mobile: initSupabase(url, key, { auth: { storage: secureStoreAdapter } })
  */
-export function initSupabase(url: string, publishableKey: string): void {
-  _client = createClient(url, publishableKey);
+export function initSupabase(
+  url: string,
+  publishableKey: string,
+  options?: SupabaseClientOptions<"public">
+): void {
+  _client = createClient(url, publishableKey, options);
 }
 
 export function getSupabaseClient(): SupabaseClient {

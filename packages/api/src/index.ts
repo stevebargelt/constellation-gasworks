@@ -1,4 +1,4 @@
-export { supabase } from "./client";
+export { supabase, initSupabase, getSupabaseClient } from "./client";
 export * from "./users";
 export * from "./relationships";
 export * from "./calendar";
