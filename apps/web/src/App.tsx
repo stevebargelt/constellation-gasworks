@@ -16,6 +16,7 @@ import CalendarOverlayPage from "./pages/CalendarOverlayPage";
 import CalendarViewPage from "./pages/CalendarViewPage";
 import TaskListsPage from "./pages/TaskListsPage";
 import LivingSpacesPage from "./pages/LivingSpacesPage";
+import LivingSpaceDetailPage from "./pages/LivingSpaceDetailPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -169,6 +170,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <LivingSpacesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/living-spaces/:id"
+          element={
+            <ProtectedRoute>
+              <LivingSpaceDetailPage />
             </ProtectedRoute>
           }
         />

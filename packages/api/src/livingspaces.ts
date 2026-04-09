@@ -45,6 +45,42 @@ export async function getLivingSpaceMembers(
   return data ?? [];
 }
 
+export async function joinLivingSpace(
+  livingSpaceId: string
+): Promise<LivingSpaceMember | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("living_space_members")
+    .insert({ living_space_id: livingSpaceId, user_id: user.id })
+    .select()
+    .single();
+  return data;
+}
+
+export async function addLivingSpaceMember(
+  livingSpaceId: string,
+  userId: string
+): Promise<LivingSpaceMember | null> {
+  const { data } = await supabase
+    .from("living_space_members")
+    .insert({ living_space_id: livingSpaceId, user_id: userId })
+    .select()
+    .single();
+  return data;
+}
+
+export async function removeLivingSpaceMember(
+  livingSpaceId: string,
+  userId: string
+): Promise<void> {
+  await supabase
+    .from("living_space_members")
+    .delete()
+    .eq("living_space_id", livingSpaceId)
+    .eq("user_id", userId);
+}
+
 export async function getMealPlansForSpace(
   livingSpaceId: string
 ): Promise<MealPlan[]> {

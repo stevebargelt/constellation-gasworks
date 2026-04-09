@@ -22,9 +22,10 @@ interface SpaceItemProps {
   currentUserId: string;
   onUpdate: (id: string, name: string, address: string | null) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  onOpen: (id: string) => void;
 }
 
-function SpaceItem({ space, currentUserId, onUpdate, onRemove }: SpaceItemProps) {
+function SpaceItem({ space, currentUserId, onUpdate, onRemove, onOpen }: SpaceItemProps) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(space.name);
   const [address, setAddress] = useState(space.address ?? "");
@@ -92,12 +93,12 @@ function SpaceItem({ space, currentUserId, onUpdate, onRemove }: SpaceItemProps)
   return (
     <View style={styles.card}>
       <View style={styles.row}>
-        <View style={{ flex: 1 }}>
+        <TouchableOpacity style={{ flex: 1 }} onPress={() => onOpen(space.id)}>
           <Text style={styles.spaceName}>{space.name}</Text>
           {space.address ? (
             <Text style={styles.spaceAddress}>{space.address}</Text>
           ) : null}
-        </View>
+        </TouchableOpacity>
         {isCreator && (
           <View style={styles.actions}>
             <TouchableOpacity onPress={() => setEditing(true)} style={styles.actionBtn}>
@@ -201,6 +202,7 @@ export default function LivingSpacesScreen() {
               currentUserId={currentUserId}
               onUpdate={handleUpdate}
               onRemove={remove}
+              onOpen={(id) => router.push(`/living-spaces/${id}`)}
             />
           )}
         />

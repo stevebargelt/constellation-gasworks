@@ -4,6 +4,8 @@ import { useLivingSpaces } from "@constellation/hooks";
 import { getMealPlansForSpace } from "@constellation/api";
 import type { LivingSpace } from "@constellation/types";
 
+// Space name is clickable — leads to detail/member page
+
 // ---------- SpaceCard ----------
 
 interface SpaceCardProps {
@@ -88,7 +90,12 @@ function SpaceCard({ space, currentUserId, onUpdate, onRemove }: SpaceCardProps)
       ) : (
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-sm font-medium text-white">{space.name}</p>
+            <Link
+              to={`/living-spaces/${space.id}`}
+              className="text-sm font-medium text-white hover:text-indigo-300"
+            >
+              {space.name}
+            </Link>
             {space.address && (
               <p className="text-xs text-gray-400 mt-0.5">{space.address}</p>
             )}
