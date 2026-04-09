@@ -10,7 +10,7 @@ import ProfilePage from "./pages/ProfilePage";
 import InvitesPage from "./screens/InvitesPage";
 import SendInvitePage from "./screens/SendInvitePage";
 import RelationshipsPage from "./pages/RelationshipsPage";
-import ConstellationPage from "./pages/ConstellationPage";
+const ConstellationPage = React.lazy(() => import("./pages/ConstellationPage"));
 import CalendarPage from "./pages/CalendarPage";
 import CalendarOverlayPage from "./pages/CalendarOverlayPage";
 import CalendarViewPage from "./pages/CalendarViewPage";
@@ -132,7 +132,9 @@ export default function App() {
           path="/constellation"
           element={
             <ProtectedRoute>
-              <ConstellationPage />
+              <React.Suspense fallback={<div className="p-8 text-gray-400">Loading graph...</div>}>
+                <ConstellationPage />
+              </React.Suspense>
             </ProtectedRoute>
           }
         />
