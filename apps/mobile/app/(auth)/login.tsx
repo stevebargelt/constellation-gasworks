@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { supabase } from "@constellation/api";
+import { useGoogleAuth } from "../../src/hooks/useGoogleAuth";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { signInWithGoogle } = useGoogleAuth();
 
   async function handleLogin() {
     setError(null);
@@ -64,6 +66,17 @@ export default function LoginScreen() {
         disabled={loading}
       >
         <Text style={styles.buttonText}>{loading ? "Signing in…" : "Sign in"}</Text>
+      </TouchableOpacity>
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>or</Text>
+        <View style={styles.dividerLine} />
+      </View>
+      <TouchableOpacity
+        style={styles.googleButton}
+        onPress={() => signInWithGoogle().catch(console.error)}
+      >
+        <Text style={styles.googleButtonText}>Continue with Google</Text>
       </TouchableOpacity>
       <Link href="/(auth)/reset-password" style={styles.link}>
         Forgot your password?
@@ -120,6 +133,35 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#f9fafb",
     fontWeight: "600",
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    marginVertical: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#374151",
+  },
+  dividerText: {
+    color: "#6b7280",
+    fontSize: 12,
+    marginHorizontal: 8,
+  },
+  googleButton: {
+    width: "100%",
+    backgroundColor: "#ffffff",
+    borderRadius: 6,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  googleButtonText: {
+    color: "#111827",
+    fontWeight: "600",
+    fontSize: 15,
   },
   link: {
     marginTop: 16,

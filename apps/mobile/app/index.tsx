@@ -1,17 +1,9 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
-import { supabase } from "@constellation/api";
 import { useAuth } from "@constellation/hooks";
 
 export default function HomeScreen() {
-  const { user } = useAuth();
-  const router = useRouter();
-
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    router.replace("/(auth)/login");
-  }
+  const { user, signOut } = useAuth();
 
   return (
     <View style={styles.container}>
@@ -19,7 +11,7 @@ export default function HomeScreen() {
       {user ? (
         <>
           <Text style={styles.email}>{user.email}</Text>
-          <TouchableOpacity style={styles.button} onPress={handleLogout}>
+          <TouchableOpacity style={styles.button} onPress={() => signOut()}>
             <Text style={styles.buttonText}>Sign out</Text>
           </TouchableOpacity>
         </>
@@ -33,6 +25,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 16,
     backgroundColor: "#030712",
   },
   title: {
