@@ -1,30 +1,39 @@
 import type { CalendarEvent } from "@constellation/types";
 
-export interface ConflictPair {
-  a: CalendarEvent;
-  b: CalendarEvent;
+export interface ConflictResult {
+  userId: string;
+  events: CalendarEvent[];
 }
 
 /**
- * Detects scheduling conflicts among a set of calendar events.
- * Two events conflict if their time ranges overlap and neither is all-day.
- * All-day events never conflict with timed events.
+ * Detects scheduling conflicts between a proposed event and existing events.
+ *
+ * For each person whose events overlap the proposed time window, returns one
+ * ConflictResult entry with that person's conflicting events grouped together.
+ * All-day events are never flagged as conflicts.
  */
-export function detectConflicts(events: CalendarEvent[]): ConflictPair[] {
-  const conflicts: ConflictPair[] = [];
-  for (let i = 0; i < events.length; i++) {
-    for (let j = i + 1; j < events.length; j++) {
-      const a = events[i];
-      const b = events[j];
-      if (a.is_all_day || b.is_all_day) continue;
-      const aStart = new Date(a.start_time).getTime();
-      const aEnd = new Date(a.end_time).getTime();
-      const bStart = new Date(b.start_time).getTime();
-      const bEnd = new Date(b.end_time).getTime();
-      if (aStart < bEnd && aEnd > bStart) {
-        conflicts.push({ a, b });
-      }
+export function detectConflicts(
+  newEvent: { start: Date; end: Date },
+  existingEvents: CalendarEvent[]
+): ConflictResult[] {
+  const newStart = newEvent.start.getTime();
+  const newEnd = newEvent.end.getTime();
+
+  const byUser = new Map<string, CalendarEvent[]>();
+
+  for (const event of existingEvents) {
+    if (event.is_all_day) continue;
+    const eStart = new Date(event.start_time).getTime();
+    const eEnd = new Date(event.end_time).getTime();
+    if (newStart < eEnd && newEnd > eStart) {
+      const list = byUser.get(event.creator_id) ?? [];
+      list.push(event);
+      byUser.set(event.creator_id, list);
     }
   }
-  return conflicts;
+
+  return Array.from(byUser.entries()).map(([userId, events]) => ({
+    userId,
+    events,
+  }));
 }
