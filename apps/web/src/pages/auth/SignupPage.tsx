@@ -36,7 +36,7 @@ export default function SignupPage() {
     }
     setLoading(false);
     if (data.session) {
-      navigate("/");
+      navigate("/profile/setup");
     } else {
       setMessage("Check your email to confirm your account before signing in.");
     }

@@ -35,3 +35,17 @@ export async function updateUser(
     .single();
   return data;
 }
+
+/**
+ * Upload an avatar file to Supabase Storage under avatars/{userId}/avatar.{ext}
+ * and return the public URL. Works in both web (File/Blob) and React Native (Blob).
+ */
+export async function uploadAvatar(userId: string, file: Blob, ext: string): Promise<string> {
+  const path = `${userId}/avatar.${ext}`;
+  const { error } = await supabase.storage
+    .from("avatars")
+    .upload(path, file, { upsert: true, contentType: file.type || `image/${ext}` });
+  if (error) throw new Error(error.message);
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  return data.publicUrl;
+}

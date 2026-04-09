@@ -44,7 +44,7 @@ export default function SignupScreen() {
     }
     setLoading(false);
     if (data.session) {
-      router.replace("/");
+      router.replace("/profile-setup");
     } else {
       setMessage("Check your email to confirm your account before signing in.");
     }

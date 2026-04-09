@@ -1,8 +1,10 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useRouter } from "expo-router";
 import { useAuth } from "@constellation/hooks";
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { user, signOut } = useAuth();
 
   return (
@@ -11,6 +13,9 @@ export default function HomeScreen() {
       {user ? (
         <>
           <Text style={styles.email}>{user.email}</Text>
+          <TouchableOpacity style={styles.button} onPress={() => router.push("/settings")}>
+            <Text style={styles.buttonText}>Settings</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.button} onPress={() => signOut()}>
             <Text style={styles.buttonText}>Sign out</Text>
           </TouchableOpacity>
