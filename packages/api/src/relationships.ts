@@ -1,9 +1,23 @@
-import type { Relationship, RelationshipPermission } from "@constellation/types";
+import type { Relationship, RelationshipPermission, User } from "@constellation/types";
 import { supabase } from "./client";
+
+export interface RelationshipWithUsers extends Relationship {
+  user_a: User | null;
+  user_b: User | null;
+}
 
 export async function getRelationships(): Promise<Relationship[]> {
   const { data } = await supabase.from("relationships").select("*");
   return data ?? [];
+}
+
+/** Fetch pending relationships with embedded sender/recipient user rows. */
+export async function getPendingInvites(): Promise<RelationshipWithUsers[]> {
+  const { data } = await supabase
+    .from("relationships")
+    .select("*, user_a:users!user_a_id(*), user_b:users!user_b_id(*)")
+    .eq("status", "pending");
+  return (data as RelationshipWithUsers[]) ?? [];
 }
 
 export async function sendRelationshipInvite(params: {
@@ -13,11 +27,16 @@ export async function sendRelationshipInvite(params: {
 }): Promise<Relationship | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
+
+  // The relationships table requires user_a_id < user_b_id (UUID lexicographic order).
+  const [userAId, userBId] =
+    user.id < params.to ? [user.id, params.to] : [params.to, user.id];
+
   const { data } = await supabase
     .from("relationships")
     .insert({
-      user_a_id: user.id,
-      user_b_id: params.to,
+      user_a_id: userAId,
+      user_b_id: userBId,
       rel_type: params.rel_type,
       custom_label: params.custom_label ?? null,
       status: "pending",
@@ -30,12 +49,32 @@ export async function sendRelationshipInvite(params: {
 export async function acceptRelationshipInvite(
   relationshipId: string
 ): Promise<Relationship | null> {
+  // Fetch both user IDs so we can insert default permissions for both parties.
+  const { data: rel } = await supabase
+    .from("relationships")
+    .select("user_a_id, user_b_id")
+    .eq("id", relationshipId)
+    .single();
+
   const { data } = await supabase
     .from("relationships")
     .update({ status: "active" })
     .eq("id", relationshipId)
     .select()
     .single();
+
+  if (rel) {
+    const defaultPerms = (["calendar", "tasks", "meals"] as const).flatMap(
+      (resource_type) => [
+        { relationship_id: relationshipId, grantor_id: rel.user_a_id, resource_type, level: "free_busy" },
+        { relationship_id: relationshipId, grantor_id: rel.user_b_id, resource_type, level: "free_busy" },
+      ]
+    );
+    await supabase
+      .from("relationship_permissions")
+      .upsert(defaultPerms, { onConflict: "relationship_id,grantor_id,resource_type" });
+  }
+
   return data;
 }
 

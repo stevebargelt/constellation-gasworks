@@ -7,6 +7,8 @@ import SignupPage from "./pages/auth/SignupPage";
 import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 import AuthCallback from "./pages/AuthCallback";
 import ProfilePage from "./pages/ProfilePage";
+import InvitesPage from "./screens/InvitesPage";
+import SendInvitePage from "./screens/SendInvitePage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -70,6 +72,22 @@ export default function App() {
           element={
             <ProtectedRoute>
               <HomePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invites"
+          element={
+            <ProtectedRoute>
+              <InvitesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invites/send"
+          element={
+            <ProtectedRoute>
+              <SendInvitePage />
             </ProtectedRoute>
           }
         />

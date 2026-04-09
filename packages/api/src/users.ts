@@ -36,6 +36,15 @@ export async function updateUser(
   return data;
 }
 
+export async function searchUserByUsername(username: string): Promise<User | null> {
+  const { data } = await supabase
+    .from("users")
+    .select("*")
+    .eq("username", username)
+    .single();
+  return data;
+}
+
 /**
  * Upload an avatar file to Supabase Storage under avatars/{userId}/avatar.{ext}
  * and return the public URL. Works in both web (File/Blob) and React Native (Blob).
