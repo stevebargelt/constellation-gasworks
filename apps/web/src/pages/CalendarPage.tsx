@@ -430,6 +430,9 @@ export default function CalendarPage() {
         <div className="flex items-center gap-4">
           <Link to="/" className="text-gray-400 hover:text-white text-sm">← Home</Link>
           <h1 className="text-xl font-semibold text-white">Calendar</h1>
+          <Link to="/calendar/overlay" className="text-sm text-gray-400 hover:text-white">
+            Overlay
+          </Link>
         </div>
         <button
           onClick={openNew}

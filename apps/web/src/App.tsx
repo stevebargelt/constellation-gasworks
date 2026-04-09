@@ -12,6 +12,7 @@ import SendInvitePage from "./screens/SendInvitePage";
 import RelationshipsPage from "./pages/RelationshipsPage";
 import ConstellationPage from "./pages/ConstellationPage";
 import CalendarPage from "./pages/CalendarPage";
+import CalendarOverlayPage from "./pages/CalendarOverlayPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -127,6 +128,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <CalendarPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/calendar/overlay"
+          element={
+            <ProtectedRoute>
+              <CalendarOverlayPage />
             </ProtectedRoute>
           }
         />

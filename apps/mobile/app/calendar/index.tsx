@@ -93,12 +93,17 @@ export default function CalendarScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.heading}>Calendar</Text>
-        <TouchableOpacity
-          style={styles.newBtn}
-          onPress={() => router.push("/calendar/new")}
-        >
-          <Text style={styles.newBtnText}>+ New</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity onPress={() => router.push("/calendar/overlay")}>
+            <Text style={styles.overlayLink}>Overlay</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.newBtn}
+            onPress={() => router.push("/calendar/new")}
+          >
+            <Text style={styles.newBtnText}>+ New</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
@@ -146,6 +151,15 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xl,
     fontWeight: theme.fontWeight.semibold,
     color: theme.colors.neutral[50],
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+  },
+  overlayLink: {
+    color: theme.colors.neutral[400],
+    fontSize: theme.fontSize.sm,
   },
   newBtn: {
     backgroundColor: theme.colors.primary[600],
