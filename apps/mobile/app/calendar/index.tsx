@@ -94,6 +94,9 @@ export default function CalendarScreen() {
       <View style={styles.header}>
         <Text style={styles.heading}>Calendar</Text>
         <View style={styles.headerRight}>
+          <TouchableOpacity onPress={() => router.push("/calendar/views")}>
+            <Text style={styles.overlayLink}>Views</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push("/calendar/overlay")}>
             <Text style={styles.overlayLink}>Overlay</Text>
           </TouchableOpacity>

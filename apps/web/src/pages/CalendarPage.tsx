@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useCalendar, useConstellationGraph, useAuth } from "@constellation/hooks";
 import { getRelationships, getUsersByIds } from "@constellation/api";
 import type { CalendarEvent, VisibleCalendarEvent } from "@constellation/types";
@@ -372,8 +372,22 @@ export default function CalendarPage() {
   const [connectionUsers, setConnectionUsers] = useState<User[]>([]);
   const { userColors } = useConstellationGraph(connectionUsers);
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<VisibleCalendarEvent | null>(null);
+
+  // Open edit modal when ?edit=<id> is present (e.g. from CalendarViewPage)
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (editId && events.length) {
+      const ev = events.find((e) => e.id === editId);
+      if (ev) {
+        setEditing(ev);
+        setModalOpen(true);
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, events, setSearchParams]);
 
   useEffect(() => {
     if (!authUser) return;
@@ -430,6 +444,9 @@ export default function CalendarPage() {
         <div className="flex items-center gap-4">
           <Link to="/" className="text-gray-400 hover:text-white text-sm">← Home</Link>
           <h1 className="text-xl font-semibold text-white">Calendar</h1>
+          <Link to="/calendar/view" className="text-sm text-gray-400 hover:text-white">
+            Views
+          </Link>
           <Link to="/calendar/overlay" className="text-sm text-gray-400 hover:text-white">
             Overlay
           </Link>

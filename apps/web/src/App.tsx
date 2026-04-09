@@ -13,6 +13,7 @@ import RelationshipsPage from "./pages/RelationshipsPage";
 import ConstellationPage from "./pages/ConstellationPage";
 import CalendarPage from "./pages/CalendarPage";
 import CalendarOverlayPage from "./pages/CalendarOverlayPage";
+import CalendarViewPage from "./pages/CalendarViewPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -128,6 +129,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <CalendarPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/calendar/view"
+          element={
+            <ProtectedRoute>
+              <CalendarViewPage />
             </ProtectedRoute>
           }
         />
