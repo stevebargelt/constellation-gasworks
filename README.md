@@ -73,16 +73,20 @@ pnpm --filter mobile start
 
 ### Environment variables
 
-`.env.local` — local Supabase CLI (never committed):
+`.env.local` — local Supabase CLI (never committed). Copy from `.env.local.example` and fill in the values from `supabase status`:
 ```
 VITE_SUPABASE_URL=http://localhost:54321
 VITE_SUPABASE_PUBLISHABLE_KEY=<from supabase status>
+EXPO_PUBLIC_SUPABASE_URL=http://localhost:54321
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<from supabase status>
 ```
 
 `.env.production` — production Supabase project (never committed):
 ```
 VITE_SUPABASE_URL=<your project URL>
 VITE_SUPABASE_PUBLISHABLE_KEY=<sb_publishable_xxx>
+EXPO_PUBLIC_SUPABASE_URL=<your project URL>
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<sb_publishable_xxx>
 ```
 
 ## Deploying
