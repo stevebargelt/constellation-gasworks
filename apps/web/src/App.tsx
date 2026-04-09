@@ -11,6 +11,7 @@ import InvitesPage from "./screens/InvitesPage";
 import SendInvitePage from "./screens/SendInvitePage";
 import RelationshipsPage from "./pages/RelationshipsPage";
 import ConstellationPage from "./pages/ConstellationPage";
+import CalendarPage from "./pages/CalendarPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -34,6 +35,9 @@ function HomePage() {
           </Link>
           <Link to="/relationships" className="text-sm text-gray-400 hover:text-white">
             Relationships
+          </Link>
+          <Link to="/calendar" className="text-sm text-gray-400 hover:text-white">
+            Calendar
           </Link>
           <Link to="/invites" className="text-sm text-gray-400 hover:text-white">
             Invites
@@ -115,6 +119,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <RelationshipsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/calendar"
+          element={
+            <ProtectedRoute>
+              <CalendarPage />
             </ProtectedRoute>
           }
         />
