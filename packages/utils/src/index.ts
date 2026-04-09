@@ -1,4 +1,4 @@
-export { detectPolyclueClusters } from "./detectPolyclueClusters";
+export { detectPolyclueClusters, getMetamours } from "./detectPolyclueClusters";
 export { detectConflicts } from "./detectConflicts";
 export type { ConflictPair } from "./detectConflicts";
 export { aggregateIngredients } from "./aggregateIngredients";

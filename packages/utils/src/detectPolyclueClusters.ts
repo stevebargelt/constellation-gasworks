@@ -43,3 +43,41 @@ export function detectPolyclueClusters(
 
   return clusters;
 }
+
+/**
+ * Returns metamour IDs for a given user.
+ * A metamour is a partner's partner who is not directly connected to the user.
+ * Only considers active relationships.
+ *
+ * @param userId - The focal user's ID
+ * @param edges - All relationship edges in the graph
+ * @returns Array of user IDs who are metamours of the given user
+ */
+export function getMetamours(userId: string, edges: Relationship[]): string[] {
+  const activeEdges = edges.filter((e) => e.status === "active");
+
+  const directPartners = new Set<string>();
+  for (const edge of activeEdges) {
+    if (edge.user_a_id === userId) directPartners.add(edge.user_b_id);
+    else if (edge.user_b_id === userId) directPartners.add(edge.user_a_id);
+  }
+
+  const metamours = new Set<string>();
+  for (const partnerId of directPartners) {
+    for (const edge of activeEdges) {
+      if (edge.user_a_id === partnerId) {
+        const candidate = edge.user_b_id;
+        if (candidate !== userId && !directPartners.has(candidate)) {
+          metamours.add(candidate);
+        }
+      } else if (edge.user_b_id === partnerId) {
+        const candidate = edge.user_a_id;
+        if (candidate !== userId && !directPartners.has(candidate)) {
+          metamours.add(candidate);
+        }
+      }
+    }
+  }
+
+  return Array.from(metamours);
+}
