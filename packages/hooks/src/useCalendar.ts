@@ -4,9 +4,13 @@ import {
   supabase,
   createCalendarEvent,
   deleteCalendarEvent,
+  deleteRecurringCalendarEvent,
   getCalendarEvents,
   updateCalendarEvent,
+  updateRecurringCalendarEvent,
+  type RecurringEditMode,
 } from "@constellation/api";
+import { expandRecurringEvents } from "@constellation/utils";
 
 interface CalendarState {
   events: VisibleCalendarEvent[];
@@ -15,6 +19,17 @@ interface CalendarState {
   create: (event: Omit<CalendarEvent, "id" | "creator_id" | "created_at">) => Promise<CalendarEvent | null>;
   update: (id: string, updates: Partial<Omit<CalendarEvent, "id" | "creator_id" | "created_at">>) => Promise<void>;
   remove: (id: string) => Promise<void>;
+  updateOccurrence: (
+    parentId: string,
+    occurrenceStart: string,
+    updates: Partial<Omit<CalendarEvent, "id" | "creator_id" | "created_at">>,
+    mode: RecurringEditMode
+  ) => Promise<void>;
+  removeOccurrence: (
+    parentId: string,
+    occurrenceStart: string,
+    mode: RecurringEditMode
+  ) => Promise<void>;
 }
 
 export function useCalendar(range?: { start: string; end: string }): CalendarState {
@@ -24,8 +39,19 @@ export function useCalendar(range?: { start: string; end: string }): CalendarSta
 
   const load = useCallback(() => {
     setLoading(true);
+    // Fetch raw events (including recurring parents) then expand client-side.
     getCalendarEvents({ range })
-      .then(setEvents)
+      .then((raw) => {
+        if (range) {
+          const expanded = expandRecurringEvents(raw as CalendarEvent[], {
+            start: new Date(range.start),
+            end: new Date(range.end),
+          });
+          setEvents(expanded as VisibleCalendarEvent[]);
+        } else {
+          setEvents(raw);
+        }
+      })
       .catch((e) => setError(e instanceof Error ? e : new Error(String(e))))
       .finally(() => setLoading(false));
   }, [range?.start, range?.end]);
@@ -63,5 +89,24 @@ export function useCalendar(range?: { start: string; end: string }): CalendarSta
     load();
   };
 
-  return { events, loading, error, create, update, remove };
+  const updateOccurrence = async (
+    parentId: string,
+    occurrenceStart: string,
+    updates: Partial<Omit<CalendarEvent, "id" | "creator_id" | "created_at">>,
+    mode: RecurringEditMode
+  ) => {
+    await updateRecurringCalendarEvent(parentId, occurrenceStart, updates, mode);
+    load();
+  };
+
+  const removeOccurrence = async (
+    parentId: string,
+    occurrenceStart: string,
+    mode: RecurringEditMode
+  ) => {
+    await deleteRecurringCalendarEvent(parentId, occurrenceStart, mode);
+    load();
+  };
+
+  return { events, loading, error, create, update, remove, updateOccurrence, removeOccurrence };
 }

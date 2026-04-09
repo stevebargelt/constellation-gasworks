@@ -14,8 +14,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@constellation/theme": "workspace:*",
     "@constellation/types": "workspace:*",
-    "@constellation/theme": "workspace:*"
+    "rrule": "^2.8.1"
   },
   "devDependencies": {
     "typescript": "*",
