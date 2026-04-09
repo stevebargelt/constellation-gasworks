@@ -46,18 +46,24 @@ export function useCalendarOverlay(
 
     if (!ownerIds.length) return;
 
-    // Subscribe to Realtime changes for any of the overlay owners.
-    // The visible_calendar_events view + RLS controls what each owner can see.
-    const channel = supabase
-      .channel(`calendar-overlay-${ownerKey}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "calendar_events" },
-        () => { load(); }
-      )
-      .subscribe();
+    // One channel per overlay owner, named shared:{uid} per architecture.
+    // Each channel multiplexes over the single Supabase Realtime connection
+    // (free tier: 500 concurrent connections — client uses one with N channels).
+    // RLS on visible_calendar_events controls which rows are returned on reconcile.
+    const channels = ownerIds.map((uid) =>
+      supabase
+        .channel(`shared:${uid}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "calendar_events" },
+          () => { load(); }
+        )
+        .subscribe()
+    );
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      for (const ch of channels) supabase.removeChannel(ch);
+    };
   }, [load, ownerKey]);
 
   return { eventsByOwner, loading, error };
