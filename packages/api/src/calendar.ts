@@ -69,3 +69,37 @@ export async function rsvpToEvent(
     .single();
   return data;
 }
+
+export async function inviteToEvent(eventId: string, userIds: string[]): Promise<void> {
+  if (!userIds.length) return;
+  const rows = userIds.map((user_id) => ({ event_id: eventId, user_id, status: "invited" as const }));
+  await supabase.from("event_attendees").upsert(rows, { onConflict: "event_id,user_id" });
+}
+
+export async function getMyEventInvites(): Promise<{ event: VisibleCalendarEvent; attendee: EventAttendee }[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Fetch attendee rows where I'm invited
+  const { data: attendees } = await supabase
+    .from("event_attendees")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("status", "invited");
+
+  if (!attendees?.length) return [];
+
+  const eventIds = attendees.map((a: EventAttendee) => a.event_id);
+  const { data: events } = await supabase
+    .from("visible_calendar_events")
+    .select("*")
+    .in("id", eventIds);
+
+  const eventMap = new Map<string, VisibleCalendarEvent>(
+    ((events ?? []) as VisibleCalendarEvent[]).map((e) => [e.id, e])
+  );
+
+  return attendees
+    .filter((a: EventAttendee) => eventMap.has(a.event_id))
+    .map((a: EventAttendee) => ({ event: eventMap.get(a.event_id)!, attendee: a }));
+}

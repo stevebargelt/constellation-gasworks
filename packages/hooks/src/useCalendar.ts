@@ -12,7 +12,7 @@ interface CalendarState {
   events: VisibleCalendarEvent[];
   loading: boolean;
   error: Error | null;
-  create: (event: Omit<CalendarEvent, "id" | "creator_id" | "created_at">) => Promise<void>;
+  create: (event: Omit<CalendarEvent, "id" | "creator_id" | "created_at">) => Promise<CalendarEvent | null>;
   update: (id: string, updates: Partial<Omit<CalendarEvent, "id" | "creator_id" | "created_at">>) => Promise<void>;
   remove: (id: string) => Promise<void>;
 }
@@ -47,9 +47,10 @@ export function useCalendar(range?: { start: string; end: string }): CalendarSta
     return () => { supabase.removeChannel(channel); };
   }, [load]);
 
-  const create = async (event: Omit<CalendarEvent, "id" | "creator_id" | "created_at">) => {
-    await createCalendarEvent(event);
+  const create = async (event: Omit<CalendarEvent, "id" | "creator_id" | "created_at">): Promise<CalendarEvent | null> => {
+    const created = await createCalendarEvent(event);
     load();
+    return created;
   };
 
   const update = async (id: string, updates: Partial<Omit<CalendarEvent, "id" | "creator_id" | "created_at">>) => {

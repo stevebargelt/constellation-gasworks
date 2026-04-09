@@ -1,9 +1,16 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCalendar, useConstellationGraph, useAuth } from "@constellation/hooks";
-import { getRelationships, getUsersByIds } from "@constellation/api";
-import type { CalendarEvent, VisibleCalendarEvent } from "@constellation/types";
-import { useEffect } from "react";
+import {
+  supabase,
+  getRelationships,
+  getUsersByIds,
+  getEventAttendees,
+  inviteToEvent,
+  rsvpToEvent,
+  getMyEventInvites,
+} from "@constellation/api";
+import type { CalendarEvent, EventAttendee, VisibleCalendarEvent } from "@constellation/types";
 import type { User } from "@constellation/types";
 
 // ---------- helpers ----------
@@ -65,12 +72,13 @@ const emptyForm = (): EventFormData => {
 interface EventModalProps {
   initialData?: VisibleCalendarEvent;
   isCreatorOwn: boolean;
-  onSave: (data: Omit<CalendarEvent, "id" | "creator_id" | "created_at">) => Promise<void>;
+  partners: User[];
+  onSave: (data: Omit<CalendarEvent, "id" | "creator_id" | "created_at">, inviteeIds: string[]) => Promise<void>;
   onDelete?: () => void;
   onClose: () => void;
 }
 
-function EventModal({ initialData, isCreatorOwn, onSave, onDelete, onClose }: EventModalProps) {
+function EventModal({ initialData, isCreatorOwn, partners, onSave, onDelete, onClose }: EventModalProps) {
   const [form, setForm] = useState<EventFormData>(
     initialData
       ? {
@@ -87,8 +95,17 @@ function EventModal({ initialData, isCreatorOwn, onSave, onDelete, onClose }: Ev
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [recurringChoice, setRecurringChoice] = useState<"this" | "all" | null>(null);
+  const [selectedInvitees, setSelectedInvitees] = useState<Set<string>>(new Set());
+  const [attendees, setAttendees] = useState<EventAttendee[]>([]);
   const isRecurring = !!initialData?.recurrence_rule || !!initialData?.recurrence_parent_id;
   const isEdit = !!initialData;
+
+  // Load existing attendees when editing own event
+  useEffect(() => {
+    if (isEdit && isCreatorOwn && initialData?.id) {
+      getEventAttendees(initialData.id).then(setAttendees);
+    }
+  }, [isEdit, isCreatorOwn, initialData?.id]);
 
   function set<K extends keyof EventFormData>(key: K, value: EventFormData[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -98,19 +115,22 @@ function EventModal({ initialData, isCreatorOwn, onSave, onDelete, onClose }: Ev
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      await onSave({
-        title: form.title.trim(),
-        start_time: new Date(form.start_time).toISOString(),
-        end_time: form.is_all_day
-          ? new Date(form.start_time).toISOString()
-          : new Date(form.end_time).toISOString(),
-        is_all_day: form.is_all_day,
-        location: form.location.trim() || null,
-        description: form.description.trim() || null,
-        is_private: form.is_private,
-        recurrence_rule: null,
-        recurrence_parent_id: null,
-      });
+      await onSave(
+        {
+          title: form.title.trim(),
+          start_time: new Date(form.start_time).toISOString(),
+          end_time: form.is_all_day
+            ? new Date(form.start_time).toISOString()
+            : new Date(form.end_time).toISOString(),
+          is_all_day: form.is_all_day,
+          location: form.location.trim() || null,
+          description: form.description.trim() || null,
+          is_private: form.is_private,
+          recurrence_rule: null,
+          recurrence_parent_id: null,
+        },
+        [...selectedInvitees]
+      );
       onClose();
     } finally {
       setSaving(false);
@@ -235,6 +255,64 @@ function EventModal({ initialData, isCreatorOwn, onSave, onDelete, onClose }: Ev
           />
           <span className="text-sm text-gray-300">Private</span>
         </label>
+
+        {/* Invite partners (new event only, or edit own event) */}
+        {isCreatorOwn && partners.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-400 mb-2">
+              {isEdit ? "Invited" : "Invite partners"}
+            </p>
+            {isEdit ? (
+              // Show existing attendees with status
+              attendees.length === 0 ? (
+                <p className="text-xs text-gray-500">No partners invited.</p>
+              ) : (
+                <div className="space-y-1">
+                  {attendees.map((a) => {
+                    const partner = partners.find((p) => p.id === a.user_id);
+                    return (
+                      <div key={a.user_id} className="flex items-center justify-between text-xs">
+                        <span className="text-gray-300">{partner?.display_name ?? a.user_id}</span>
+                        <span className={`px-2 py-0.5 rounded text-xs ${
+                          a.status === "accepted" ? "bg-green-900/50 text-green-400" :
+                          a.status === "declined" ? "bg-red-900/50 text-red-400" :
+                          a.status === "tentative" ? "bg-yellow-900/50 text-yellow-400" :
+                          "bg-gray-700 text-gray-400"
+                        }`}>{a.status}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : (
+              // Invite picker for new events
+              <div className="flex flex-wrap gap-2">
+                {partners.map((p) => {
+                  const invited = selectedInvitees.has(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedInvitees((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(p.id)) next.delete(p.id);
+                        else next.add(p.id);
+                        return next;
+                      })}
+                      className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                        invited
+                          ? "bg-primary-700 border-primary-500 text-white"
+                          : "border-gray-600 text-gray-400 hover:border-gray-400 hover:text-white"
+                      }`}
+                    >
+                      {invited ? "✓ " : ""}{p.display_name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Delete confirm */}
         {confirmDelete && (
@@ -389,6 +467,14 @@ export default function CalendarPage() {
     }
   }, [searchParams, events, setSearchParams]);
 
+  // Pending invites where I'm an attendee
+  const [myInvites, setMyInvites] = useState<{ event: VisibleCalendarEvent; attendee: EventAttendee }[]>([]);
+  const [rsvping, setRsvping] = useState<string | null>(null);
+
+  const loadInvites = useCallback(() => {
+    getMyEventInvites().then(setMyInvites);
+  }, []);
+
   useEffect(() => {
     if (!authUser) return;
     getRelationships().then((rels) => {
@@ -398,7 +484,18 @@ export default function CalendarPage() {
       );
       getUsersByIds([...new Set(ids)]).then(setConnectionUsers);
     });
-  }, [authUser]);
+    loadInvites();
+
+    // Realtime: refresh invites when event_attendees change
+    const channel = supabase
+      .channel("calendar-attendees-me")
+      .on("postgres_changes", { event: "*", schema: "public", table: "event_attendees" }, () => {
+        loadInvites();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [authUser, loadInvites]);
 
   function getColor(creatorId: string): string {
     if (creatorId === authUser?.id) return FALLBACK_COLOR;
@@ -416,11 +513,14 @@ export default function CalendarPage() {
   }
 
   const handleSave = useCallback(
-    async (data: Omit<CalendarEvent, "id" | "creator_id" | "created_at">) => {
+    async (data: Omit<CalendarEvent, "id" | "creator_id" | "created_at">, inviteeIds: string[]) => {
       if (editing) {
         await update(editing.id, data);
       } else {
-        await create(data);
+        const created = await create(data);
+        if (created && inviteeIds.length) {
+          await inviteToEvent(created.id, inviteeIds);
+        }
       }
     },
     [editing, create, update]
@@ -431,6 +531,16 @@ export default function CalendarPage() {
       remove(editing.id);
     }
   }, [editing, remove]);
+
+  async function handleRsvp(eventId: string, status: EventAttendee["status"]) {
+    setRsvping(eventId);
+    try {
+      await rsvpToEvent(eventId, status);
+      loadInvites();
+    } finally {
+      setRsvping(null);
+    }
+  }
 
   // Sort events by start_time
   const sorted = [...events].sort(
@@ -458,6 +568,41 @@ export default function CalendarPage() {
           + New Event
         </button>
       </div>
+
+      {/* Pending invites */}
+      {myInvites.length > 0 && (
+        <div className="mb-6 p-4 bg-gray-800 border border-gray-700 rounded-lg space-y-3">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Pending invites</p>
+          {myInvites.map(({ event }) => (
+            <div key={event.id} className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white truncate">{event.title}</p>
+                <p className="text-xs text-gray-400">
+                  {formatDate(event.start_time)}
+                  {!event.is_all_day && ` · ${formatTime(event.start_time)}`}
+                </p>
+              </div>
+              <div className="flex gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => handleRsvp(event.id, "accepted")}
+                  disabled={rsvping === event.id}
+                  className="px-2.5 py-1 bg-green-700 hover:bg-green-600 disabled:opacity-50 rounded text-xs text-white"
+                >Accept</button>
+                <button
+                  onClick={() => handleRsvp(event.id, "tentative")}
+                  disabled={rsvping === event.id}
+                  className="px-2.5 py-1 bg-yellow-700 hover:bg-yellow-600 disabled:opacity-50 rounded text-xs text-white"
+                >Maybe</button>
+                <button
+                  onClick={() => handleRsvp(event.id, "declined")}
+                  disabled={rsvping === event.id}
+                  className="px-2.5 py-1 bg-gray-600 hover:bg-gray-500 disabled:opacity-50 rounded text-xs text-white"
+                >Decline</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Event list */}
       {loading ? (
@@ -491,6 +636,7 @@ export default function CalendarPage() {
         <EventModal
           initialData={editing ?? undefined}
           isCreatorOwn={!editing || editing.creator_id === authUser?.id}
+          partners={connectionUsers}
           onSave={handleSave}
           onDelete={editing ? handleDelete : undefined}
           onClose={() => setModalOpen(false)}

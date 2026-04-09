@@ -13,10 +13,12 @@ import {
   Platform,
   Alert,
 } from "react-native";
-import type { CalendarEvent, VisibleCalendarEvent } from "@constellation/types";
+import type { CalendarEvent, User, VisibleCalendarEvent } from "@constellation/types";
 import { theme } from "../../src/theme";
 
 export type EventFormData = Omit<CalendarEvent, "id" | "creator_id" | "created_at">;
+
+export type EventFormSaveHandler = (data: EventFormData, inviteeIds: string[]) => Promise<void>;
 
 function toLocalDateString(iso: string): string {
   const d = new Date(iso);
@@ -37,12 +39,13 @@ function combineDateTime(date: string, time: string): string {
 interface Props {
   initialData?: VisibleCalendarEvent;
   readOnly?: boolean;
-  onSave: (data: EventFormData) => Promise<void>;
+  partners?: User[];
+  onSave: EventFormSaveHandler;
   onDelete?: () => void;
   onCancel: () => void;
 }
 
-export default function EventForm({ initialData, readOnly, onSave, onDelete, onCancel }: Props) {
+export default function EventForm({ initialData, readOnly, partners = [], onSave, onDelete, onCancel }: Props) {
   const now = new Date();
   now.setMinutes(0, 0, 0);
   const later = new Date(now.getTime() + 3600000);
@@ -65,8 +68,10 @@ export default function EventForm({ initialData, readOnly, onSave, onDelete, onC
   const [description, setDescription] = useState(initialData?.description ?? "");
   const [isPrivate, setIsPrivate] = useState(initialData?.is_private ?? false);
   const [saving, setSaving] = useState(false);
+  const [selectedInvitees, setSelectedInvitees] = useState<Set<string>>(new Set());
 
   const isRecurring = !!initialData?.recurrence_rule || !!initialData?.recurrence_parent_id;
+  const isNew = !initialData;
 
   async function handleSave() {
     if (!title.trim()) {
@@ -82,17 +87,20 @@ export default function EventForm({ initialData, readOnly, onSave, onDelete, onC
 
     setSaving(true);
     try {
-      await onSave({
-        title: title.trim(),
-        start_time: startIso,
-        end_time: endIso,
-        is_all_day: isAllDay,
-        location: location.trim() || null,
-        description: description.trim() || null,
-        is_private: isPrivate,
-        recurrence_rule: null,
-        recurrence_parent_id: null,
-      });
+      await onSave(
+        {
+          title: title.trim(),
+          start_time: startIso,
+          end_time: endIso,
+          is_all_day: isAllDay,
+          location: location.trim() || null,
+          description: description.trim() || null,
+          is_private: isPrivate,
+          recurrence_rule: null,
+          recurrence_parent_id: null,
+        },
+        [...selectedInvitees]
+      );
     } finally {
       setSaving(false);
     }
@@ -241,6 +249,35 @@ export default function EventForm({ initialData, readOnly, onSave, onDelete, onC
         />
       </View>
 
+      {/* Invite partners (new events only) */}
+      {isNew && partners.length > 0 && (
+        <View style={{ marginTop: theme.spacing[3] }}>
+          <Text style={styles.label}>Invite partners</Text>
+          <View style={styles.inviteRow}>
+            {partners.map((p) => {
+              const invited = selectedInvitees.has(p.id);
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[styles.inviteChip, invited && styles.inviteChipSelected]}
+                  onPress={() => setSelectedInvitees((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(p.id)) next.delete(p.id);
+                    else next.add(p.id);
+                    return next;
+                  })}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.inviteChipText, invited && styles.inviteChipTextSelected]}>
+                    {invited ? "✓ " : ""}{p.display_name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       {/* Actions */}
       <View style={styles.actions}>
         {onDelete && !readOnly && (
@@ -346,5 +383,29 @@ const styles = StyleSheet.create({
   deleteBtnText: {
     color: "#f87171",
     fontSize: theme.fontSize.sm,
+  },
+  inviteRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[1],
+  },
+  inviteChip: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[1],
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.neutral[600],
+  },
+  inviteChipSelected: {
+    backgroundColor: theme.colors.primary[700],
+    borderColor: theme.colors.primary[500],
+  },
+  inviteChipText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.neutral[400],
+  },
+  inviteChipTextSelected: {
+    color: "#fff",
   },
 });
