@@ -8,12 +8,182 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useLivingSpaces } from "@constellation/hooks";
-import { getMealPlansForSpace, supabase } from "@constellation/api";
-import type { LivingSpace } from "@constellation/types";
+import { useLivingSpaces, useLivingSpaceMembers } from "@constellation/hooks";
+import { getMealPlansForSpace, getActivePartners, supabase } from "@constellation/api";
+import type { LivingSpace, User } from "@constellation/types";
 import { theme } from "../../src/theme";
+
+const FALLBACK_COLOR = "#6366f1";
+
+// ---------- MemberAvatar ----------
+
+function MemberAvatar({ name, color }: { name: string; color: string }) {
+  const initials = name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  return (
+    <View style={[styles.avatar, { backgroundColor: color }]}>
+      <Text style={styles.avatarText}>{initials}</Text>
+    </View>
+  );
+}
+
+// ---------- SpaceMembersPanel ----------
+
+interface SpaceMembersPanelProps {
+  spaceId: string;
+  creatorId: string | null;
+  currentUserId: string;
+}
+
+function SpaceMembersPanel({ spaceId, creatorId, currentUserId }: SpaceMembersPanelProps) {
+  const { members, userColors, loading, addSelf, addPartner, removeSelf, removePartner } =
+    useLivingSpaceMembers(spaceId);
+  const [partners, setPartners] = useState<User[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  React.useEffect(() => {
+    getActivePartners().then(setPartners);
+  }, []);
+
+  const isMember = members.some((m) => m.user_id === currentUserId);
+  const isCreator = currentUserId === creatorId;
+  const nonMemberPartners = partners.filter(
+    (p) => !members.some((m) => m.user_id === p.id)
+  );
+
+  async function handleJoin() {
+    setBusy(true);
+    try { await addSelf(); } finally { setBusy(false); }
+  }
+
+  async function handleLeave() {
+    Alert.alert("Leave space", "Remove yourself from this living space?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Leave", style: "destructive", onPress: async () => {
+          setBusy(true);
+          try { await removeSelf(); } finally { setBusy(false); }
+        },
+      },
+    ]);
+  }
+
+  async function handleAddPartner(userId: string, name: string) {
+    setBusy(true);
+    setPickerOpen(false);
+    try {
+      await addPartner(userId);
+    } catch (e) {
+      Alert.alert("Error", e instanceof Error ? e.message : "Failed to add member");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemoveMember(userId: string, name: string) {
+    Alert.alert("Remove member", `Remove ${name} from this space?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove", style: "destructive", onPress: async () => {
+          setBusy(true);
+          try { await removePartner(userId); } finally { setBusy(false); }
+        },
+      },
+    ]);
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.membersSection}>
+        <ActivityIndicator size="small" color={theme.colors.primary[400]} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.membersSection}>
+      {/* Member list */}
+      {members.length === 0 ? (
+        <Text style={styles.noMembersText}>No members yet.</Text>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.membersList}>
+          {members.map((m) => (
+            <View key={m.id} style={styles.memberChip}>
+              <MemberAvatar
+                name={m.user.display_name}
+                color={userColors.get(m.user_id) ?? FALLBACK_COLOR}
+              />
+              <Text style={styles.memberName}>{m.user.display_name}</Text>
+              {isCreator && m.user_id !== currentUserId && (
+                <TouchableOpacity
+                  onPress={() => handleRemoveMember(m.user_id, m.user.display_name)}
+                  disabled={busy}
+                  style={styles.removeChipBtn}
+                >
+                  <Text style={styles.removeChipText}>×</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* Actions */}
+      <View style={styles.memberActions}>
+        {!isMember && (
+          <TouchableOpacity
+            onPress={handleJoin}
+            disabled={busy}
+            style={[styles.actionChip, styles.actionChipPrimary, busy && styles.disabled]}
+          >
+            <Text style={styles.actionChipTextPrimary}>Join space</Text>
+          </TouchableOpacity>
+        )}
+        {isMember && (
+          <TouchableOpacity
+            onPress={handleLeave}
+            disabled={busy}
+            style={[styles.actionChip, busy && styles.disabled]}
+          >
+            <Text style={styles.actionChipText}>Leave</Text>
+          </TouchableOpacity>
+        )}
+        {isMember && nonMemberPartners.length > 0 && (
+          <TouchableOpacity
+            onPress={() => setPickerOpen((o) => !o)}
+            disabled={busy}
+            style={[styles.actionChip, busy && styles.disabled]}
+          >
+            <Text style={styles.actionChipText}>Add partner…</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Partner picker */}
+      {pickerOpen && nonMemberPartners.length > 0 && (
+        <View style={styles.partnerPicker}>
+          {nonMemberPartners.map((p) => (
+            <TouchableOpacity
+              key={p.id}
+              onPress={() => handleAddPartner(p.id, p.display_name)}
+              style={styles.partnerPickerItem}
+            >
+              <Text style={styles.partnerPickerText}>{p.display_name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
 
 // ---------- SpaceItem ----------
 
@@ -109,6 +279,11 @@ function SpaceItem({ space, currentUserId, onUpdate, onRemove }: SpaceItemProps)
           </View>
         )}
       </View>
+      <SpaceMembersPanel
+        spaceId={space.id}
+        creatorId={space.creator_id}
+        currentUserId={currentUserId}
+      />
     </View>
   );
 }
@@ -338,5 +513,95 @@ const styles = StyleSheet.create({
     color: "#f87171",
     fontSize: theme.fontSize.sm,
     padding: theme.spacing[4],
+  },
+
+  // Members panel
+  membersSection: {
+    marginTop: theme.spacing[3],
+    paddingTop: theme.spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.neutral[700],
+    gap: theme.spacing[2],
+  },
+  noMembersText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.neutral[500],
+  },
+  membersList: {
+    flexDirection: "row",
+  },
+  memberChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    marginRight: theme.spacing[2],
+  },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: theme.fontWeight.semibold,
+  },
+  memberName: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.neutral[300],
+  },
+  removeChipBtn: {
+    paddingHorizontal: 2,
+  },
+  removeChipText: {
+    fontSize: theme.fontSize.base,
+    color: "#f87171",
+    lineHeight: 16,
+  },
+  memberActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[1],
+  },
+  actionChip: {
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.neutral[600],
+  },
+  actionChipPrimary: {
+    backgroundColor: theme.colors.primary[600],
+    borderColor: theme.colors.primary[600],
+  },
+  actionChipText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.neutral[300],
+  },
+  actionChipTextPrimary: {
+    fontSize: theme.fontSize.xs,
+    color: "#fff",
+  },
+  disabled: {
+    opacity: 0.4,
+  },
+  partnerPicker: {
+    backgroundColor: theme.colors.neutral[700],
+    borderRadius: theme.borderRadius.md,
+    overflow: "hidden",
+    marginTop: theme.spacing[1],
+  },
+  partnerPickerItem: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.neutral[600],
+  },
+  partnerPickerText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.neutral[100],
   },
 });

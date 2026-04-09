@@ -1,8 +1,161 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { useLivingSpaces } from "@constellation/hooks";
-import { getMealPlansForSpace } from "@constellation/api";
-import type { LivingSpace } from "@constellation/types";
+import { useLivingSpaces, useLivingSpaceMembers } from "@constellation/hooks";
+import { getMealPlansForSpace, getActivePartners } from "@constellation/api";
+import type { LivingSpace, User } from "@constellation/types";
+
+const FALLBACK_COLOR = "#6366f1";
+
+// ---------- MemberAvatar ----------
+
+function MemberAvatar({ name, color }: { name: string; color: string }) {
+  const initials = name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  return (
+    <div
+      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-white shrink-0"
+      style={{ backgroundColor: color }}
+      title={name}
+    >
+      {initials}
+    </div>
+  );
+}
+
+// ---------- SpaceMembersPanel ----------
+
+interface SpaceMembersPanelProps {
+  spaceId: string;
+  creatorId: string | null;
+  currentUserId: string;
+}
+
+function SpaceMembersPanel({ spaceId, creatorId, currentUserId }: SpaceMembersPanelProps) {
+  const { members, userColors, loading, addSelf, addPartner, removeSelf, removePartner } =
+    useLivingSpaceMembers(spaceId);
+  const [partners, setPartners] = useState<User[]>([]);
+  const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  React.useEffect(() => {
+    getActivePartners().then(setPartners);
+  }, []);
+
+  const isMember = members.some((m) => m.user_id === currentUserId);
+  const isCreator = currentUserId === creatorId;
+
+  const nonMemberPartners = partners.filter(
+    (p) => !members.some((m) => m.user_id === p.id)
+  );
+
+  async function handleJoin() {
+    setBusy(true);
+    try { await addSelf(); } finally { setBusy(false); }
+  }
+
+  async function handleLeave() {
+    setBusy(true);
+    try { await removeSelf(); } finally { setBusy(false); }
+  }
+
+  async function handleAddPartner() {
+    if (!selectedPartnerId) return;
+    setBusy(true);
+    try {
+      await addPartner(selectedPartnerId);
+      setSelectedPartnerId("");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to add member");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemoveMember(userId: string) {
+    setBusy(true);
+    try { await removePartner(userId); } finally { setBusy(false); }
+  }
+
+  if (loading) return <p className="text-xs text-gray-500 mt-2">Loading members…</p>;
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-700 space-y-3">
+      {/* Member list */}
+      {members.length === 0 ? (
+        <p className="text-xs text-gray-500">No members yet.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {members.map((m) => (
+            <div key={m.id} className="flex items-center gap-1.5">
+              <MemberAvatar
+                name={m.user.display_name}
+                color={userColors.get(m.user_id) ?? FALLBACK_COLOR}
+              />
+              <span className="text-xs text-gray-300">{m.user.display_name}</span>
+              {isCreator && m.user_id !== currentUserId && (
+                <button
+                  onClick={() => handleRemoveMember(m.user_id)}
+                  disabled={busy}
+                  className="text-xs text-red-400 hover:text-red-300 disabled:opacity-40 ml-0.5"
+                  title="Remove from space"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex flex-wrap items-center gap-2">
+        {!isMember && (
+          <button
+            onClick={handleJoin}
+            disabled={busy}
+            className="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-40"
+          >
+            Join space
+          </button>
+        )}
+        {isMember && (
+          <button
+            onClick={handleLeave}
+            disabled={busy}
+            className="text-xs px-2 py-1 text-gray-400 border border-gray-600 rounded hover:text-white hover:border-gray-400 disabled:opacity-40"
+          >
+            Leave space
+          </button>
+        )}
+        {isMember && nonMemberPartners.length > 0 && (
+          <div className="flex items-center gap-1">
+            <select
+              value={selectedPartnerId}
+              onChange={(e) => setSelectedPartnerId(e.target.value)}
+              className="text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="">Add a partner…</option>
+              {nonMemberPartners.map((p) => (
+                <option key={p.id} value={p.id}>{p.display_name}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleAddPartner}
+              disabled={!selectedPartnerId || busy}
+              className="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-500 disabled:opacity-40"
+            >
+              Add
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ---------- SpaceCard ----------
 
@@ -111,6 +264,15 @@ function SpaceCard({ space, currentUserId, onUpdate, onRemove }: SpaceCardProps)
             </div>
           )}
         </div>
+      )}
+
+      {/* Members section (always shown) */}
+      {!editing && (
+        <SpaceMembersPanel
+          spaceId={space.id}
+          creatorId={space.creator_id}
+          currentUserId={currentUserId}
+        />
       )}
     </div>
   );
