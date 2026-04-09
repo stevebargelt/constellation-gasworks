@@ -10,6 +10,25 @@ export async function getUser(id: string): Promise<User | null> {
   return data;
 }
 
+export async function getUsersByIds(ids: string[]): Promise<User[]> {
+  if (!ids.length) return [];
+  const { data } = await supabase
+    .from("users")
+    .select("*")
+    .in("id", ids);
+  return data ?? [];
+}
+
+export async function getUserByUsername(username: string): Promise<User | null> {
+  const { data } = await supabase
+    .from("users")
+    .select("*")
+    .eq("username", username)
+    .single();
+  return data;
+}
+
+
 export async function createUser(
   id: string,
   displayName: string,

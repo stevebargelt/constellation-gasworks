@@ -10,6 +10,7 @@ import ProfilePage from "./pages/ProfilePage";
 import InvitesPage from "./screens/InvitesPage";
 import SendInvitePage from "./screens/SendInvitePage";
 import RelationshipsPage from "./pages/RelationshipsPage";
+import ConstellationPage from "./pages/ConstellationPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -28,8 +29,14 @@ function HomePage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Constellation</h1>
         <div className="flex items-center gap-4">
+          <Link to="/constellation" className="text-sm text-gray-400 hover:text-white">
+            Graph
+          </Link>
           <Link to="/relationships" className="text-sm text-gray-400 hover:text-white">
             Relationships
+          </Link>
+          <Link to="/invites" className="text-sm text-gray-400 hover:text-white">
+            Invites
           </Link>
           <Link to="/settings" className="text-sm text-gray-400 hover:text-white">
             Settings
@@ -92,6 +99,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <SendInvitePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/constellation"
+          element={
+            <ProtectedRoute>
+              <ConstellationPage />
             </ProtectedRoute>
           }
         />
