@@ -1,16 +1,22 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
-import { supabase } from "@constellation/api";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
 import { useAuth } from "@constellation/hooks";
 
 export default function HomeScreen() {
-  const { user } = useAuth();
-  const router = useRouter();
+  const { user, loading, signOut } = useAuth();
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    router.replace("/(auth)/login");
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#6366f1" />
+      </View>
+    );
   }
 
   return (
@@ -18,9 +24,9 @@ export default function HomeScreen() {
       <Text style={styles.title}>Constellation</Text>
       {user ? (
         <>
-          <Text style={styles.email}>{user.email}</Text>
-          <TouchableOpacity style={styles.button} onPress={handleLogout}>
-            <Text style={styles.buttonText}>Sign out</Text>
+          <Text style={styles.subtitle}>{user.email}</Text>
+          <TouchableOpacity style={styles.signOutButton} onPress={() => signOut()}>
+            <Text style={styles.signOutText}>Sign out</Text>
           </TouchableOpacity>
         </>
       ) : null}
@@ -33,26 +39,25 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 16,
     backgroundColor: "#030712",
   },
   title: {
     fontSize: 28,
     fontWeight: "bold",
     color: "#f9fafb",
-    marginBottom: 8,
   },
-  email: {
+  subtitle: {
     fontSize: 14,
     color: "#9ca3af",
-    marginBottom: 24,
   },
-  button: {
+  signOutButton: {
+    backgroundColor: "#1f2937",
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: "#1f2937",
-    borderRadius: 6,
+    borderRadius: 8,
   },
-  buttonText: {
+  signOutText: {
     color: "#f9fafb",
     fontSize: 14,
   },
