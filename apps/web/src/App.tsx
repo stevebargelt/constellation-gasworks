@@ -15,6 +15,7 @@ import CalendarPage from "./pages/CalendarPage";
 import CalendarOverlayPage from "./pages/CalendarOverlayPage";
 import CalendarViewPage from "./pages/CalendarViewPage";
 import TaskListsPage from "./pages/TaskListsPage";
+import TasksPage from "./pages/TasksPage";
 import LivingSpacesPage from "./pages/LivingSpacesPage";
 import MealPlansPage from "./pages/MealPlansPage";
 import MealPlanDetailPage from "./pages/MealPlanDetailPage";
@@ -166,6 +167,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <TaskListsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tasks/:id"
+          element={
+            <ProtectedRoute>
+              <TasksPage />
             </ProtectedRoute>
           }
         />

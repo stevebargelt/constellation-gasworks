@@ -6,6 +6,15 @@ export async function getTaskLists(): Promise<TaskList[]> {
   return data ?? [];
 }
 
+export async function getTaskList(id: string): Promise<TaskList | null> {
+  const { data } = await supabase
+    .from("task_lists")
+    .select("*")
+    .eq("id", id)
+    .single();
+  return data;
+}
+
 export async function createTaskList(
   title: string
 ): Promise<TaskList | null> {
