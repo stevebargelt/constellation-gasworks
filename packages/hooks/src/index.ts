@@ -8,4 +8,5 @@ export { useTasks } from "./useTasks";
 export { useTaskLists } from "./useTaskLists";
 export { useRecipes } from "./useRecipes";
 export { useMealPlan } from "./useMealPlan";
+export { useMealPlans } from "./useMealPlans";
 export { useShoppingList } from "./useShoppingList";
