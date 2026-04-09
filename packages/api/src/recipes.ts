@@ -54,6 +54,14 @@ export async function getRecipeIngredients(
   return data ?? [];
 }
 
+export async function getSharedRecipes(): Promise<Recipe[]> {
+  const { data } = await supabase
+    .from("recipe_shares")
+    .select("recipes(*)")
+    .returns<{ recipes: Recipe }[]>();
+  return (data ?? []).map((row) => row.recipes).filter(Boolean);
+}
+
 export async function shareRecipe(
   recipeId: string,
   sharedWithId: string
@@ -64,4 +72,8 @@ export async function shareRecipe(
     .select()
     .single();
   return data;
+}
+
+export async function revokeRecipeShare(shareId: string): Promise<void> {
+  await supabase.from("recipe_shares").delete().eq("id", shareId);
 }
