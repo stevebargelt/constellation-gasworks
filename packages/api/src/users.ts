@@ -10,6 +10,19 @@ export async function getUser(id: string): Promise<User | null> {
   return data;
 }
 
+export async function createUser(
+  id: string,
+  displayName: string,
+  username: string
+): Promise<User | null> {
+  const { data } = await supabase
+    .from("users")
+    .insert({ id, display_name: displayName, username })
+    .select()
+    .single();
+  return data;
+}
+
 export async function updateUser(
   id: string,
   updates: Partial<Omit<User, "id" | "created_at">>
