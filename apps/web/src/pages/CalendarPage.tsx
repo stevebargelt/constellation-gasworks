@@ -1,6 +1,6 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useCalendar, useConstellationGraph, useAuth } from "@constellation/hooks";
+import { useCalendar, useCalendarOverlay, useConstellationGraph, useAuth } from "@constellation/hooks";
 import { getRelationships, getUsersByIds } from "@constellation/api";
 import type { CalendarEvent, VisibleCalendarEvent } from "@constellation/types";
 import { useEffect } from "react";
@@ -364,6 +364,47 @@ function EventCard({ event, personColor, isOwn, onEdit }: EventCardProps) {
   );
 }
 
+// ---------- OverlayLegend ----------
+
+interface OverlayLegendProps {
+  partners: User[];
+  selectedIds: Set<string>;
+  getColor: (id: string) => string;
+  onToggle: (id: string) => void;
+}
+
+function OverlayLegend({ partners, selectedIds, getColor, onToggle }: OverlayLegendProps) {
+  if (!partners.length) return null;
+  return (
+    <div className="mb-4 p-3 bg-gray-800 border border-gray-700 rounded-lg">
+      <p className="text-xs text-gray-400 mb-2 font-medium uppercase tracking-wide">Show partners</p>
+      <div className="flex flex-wrap gap-2">
+        {partners.map((p) => {
+          const selected = selectedIds.has(p.id);
+          const color = getColor(p.id);
+          return (
+            <button
+              key={p.id}
+              onClick={() => onToggle(p.id)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs transition-colors ${
+                selected
+                  ? "border-transparent bg-gray-600 text-white"
+                  : "border-gray-600 text-gray-400 hover:text-white hover:border-gray-400"
+              }`}
+            >
+              <span
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: color }}
+              />
+              {p.display_name}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ---------- CalendarPage ----------
 
 export default function CalendarPage() {
@@ -374,6 +415,12 @@ export default function CalendarPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<VisibleCalendarEvent | null>(null);
+
+  // Overlay partner selection
+  const [selectedPartnerIds, setSelectedPartnerIds] = useState<Set<string>>(new Set());
+  const selectedIdsArray = useMemo(() => [...selectedPartnerIds], [selectedPartnerIds]);
+  const { eventsByOwner: overlayEventsByOwner, loading: overlayLoading } =
+    useCalendarOverlay(selectedIdsArray);
 
   useEffect(() => {
     if (!authUser) return;
@@ -389,6 +436,15 @@ export default function CalendarPage() {
   function getColor(creatorId: string): string {
     if (creatorId === authUser?.id) return FALLBACK_COLOR;
     return userColors.get(creatorId) ?? FALLBACK_COLOR;
+  }
+
+  function togglePartner(id: string) {
+    setSelectedPartnerIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function openNew() {
@@ -418,15 +474,22 @@ export default function CalendarPage() {
     }
   }, [editing, remove]);
 
-  // Sort events by start_time
-  const sorted = [...events].sort(
-    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-  );
+  // Merge own events + selected overlay events, sorted by start_time
+  const allEvents = useMemo<VisibleCalendarEvent[]>(() => {
+    const overlayFlat = selectedIdsArray.flatMap(
+      (id) => overlayEventsByOwner[id] ?? []
+    );
+    return [...events, ...overlayFlat].sort(
+      (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    );
+  }, [events, selectedIdsArray, overlayEventsByOwner]);
+
+  const anyLoading = loading || overlayLoading;
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <Link to="/" className="text-gray-400 hover:text-white text-sm">← Home</Link>
           <h1 className="text-xl font-semibold text-white">Calendar</h1>
@@ -439,10 +502,18 @@ export default function CalendarPage() {
         </button>
       </div>
 
+      {/* Overlay partner legend */}
+      <OverlayLegend
+        partners={connectionUsers}
+        selectedIds={selectedPartnerIds}
+        getColor={getColor}
+        onToggle={togglePartner}
+      />
+
       {/* Event list */}
-      {loading ? (
+      {anyLoading ? (
         <p className="text-gray-400 text-sm">Loading…</p>
-      ) : sorted.length === 0 ? (
+      ) : allEvents.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           <p className="text-sm">No events yet.</p>
           <button
@@ -454,13 +525,13 @@ export default function CalendarPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {sorted.map((event) => (
+          {allEvents.map((event) => (
             <EventCard
-              key={event.id}
+              key={`${event.creator_id}-${event.id}`}
               event={event}
               personColor={getColor(event.creator_id)}
               isOwn={event.creator_id === authUser?.id}
-              onEdit={() => openEdit(event)}
+              onEdit={() => event.creator_id === authUser?.id ? openEdit(event) : undefined}
             />
           ))}
         </div>
