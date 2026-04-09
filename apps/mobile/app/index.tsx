@@ -13,6 +13,9 @@ export default function HomeScreen() {
       {user ? (
         <>
           <Text style={styles.email}>{user.email}</Text>
+          <TouchableOpacity style={styles.button} onPress={() => router.push("/relationships")}>
+            <Text style={styles.buttonText}>Relationships</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.button} onPress={() => router.push("/settings")}>
             <Text style={styles.buttonText}>Settings</Text>
           </TouchableOpacity>
