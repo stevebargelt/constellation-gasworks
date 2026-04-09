@@ -35,3 +35,16 @@ export async function updateUser(
     .single();
   return data;
 }
+
+export async function upsertUser(
+  id: string,
+  displayName: string,
+  username: string
+): Promise<User | null> {
+  const { data } = await supabase
+    .from("users")
+    .upsert({ id, display_name: displayName, username }, { onConflict: "id" })
+    .select()
+    .single();
+  return data;
+}
