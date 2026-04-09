@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TaskList } from "@constellation/types";
 import {
   supabase,
@@ -25,6 +25,7 @@ export function useTaskLists(): TaskListsState {
   const [taskLists, setTaskLists] = useState<TaskList[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const sharedChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -37,23 +38,30 @@ export function useTaskLists(): TaskListsState {
   useEffect(() => {
     load();
 
-    // Subscribe to Realtime changes on task_lists and task_list_members.
-    // RLS ensures only rows visible to auth.uid() are returned on refetch.
-    const channel = supabase
-      .channel("task-lists-own")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "task_lists" },
-        () => { load(); }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "task_list_members" },
-        () => { load(); }
-      )
-      .subscribe();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      const uid = user.id;
 
-    return () => { supabase.removeChannel(channel); };
+      // shared:{uid} — task list and membership changes.
+      // RLS ensures only lists this user belongs to are returned on each refetch.
+      sharedChannelRef.current = supabase
+        .channel(`shared:${uid}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "task_lists" },
+          () => { load(); }
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "task_list_members" },
+          () => { load(); }
+        )
+        .subscribe();
+    });
+
+    return () => {
+      if (sharedChannelRef.current) supabase.removeChannel(sharedChannelRef.current);
+    };
   }, [load]);
 
   const create = async (title: string): Promise<TaskList | null> => {

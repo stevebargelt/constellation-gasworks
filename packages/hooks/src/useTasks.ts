@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Task, TaskStatus } from "@constellation/types";
 import { supabase, createTask, deleteTask, getTasks, updateTask } from "@constellation/api";
 
@@ -17,6 +17,8 @@ export function useTasks(taskListId: string): TasksState {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const sharedChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const userChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -29,23 +31,87 @@ export function useTasks(taskListId: string): TasksState {
   useEffect(() => {
     load();
 
-    // Subscribe to Realtime changes for this task list.
-    // Filter by task_list_id so updates from other lists don't trigger reloads.
-    const channel = supabase
-      .channel(`tasks-list-${taskListId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "tasks",
-          filter: `task_list_id=eq.${taskListId}`,
-        },
-        () => { load(); }
-      )
-      .subscribe();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      const uid = user.id;
 
-    return () => { supabase.removeChannel(channel); };
+      // shared:{uid} — task changes within this list (inserts, updates, deletes by any member).
+      // Optimistic local state update on each event; reconcile with server load() after.
+      sharedChannelRef.current = supabase
+        .channel(`shared:${uid}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "tasks",
+            filter: `task_list_id=eq.${taskListId}`,
+          },
+          (payload) => {
+            const newTask = payload.new as Task;
+            setTasks((prev) => {
+              if (prev.some((t) => t.id === newTask.id)) return prev;
+              return [...prev, newTask];
+            });
+            load();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "tasks",
+            filter: `task_list_id=eq.${taskListId}`,
+          },
+          (payload) => {
+            const updated = payload.new as Task;
+            setTasks((prev) =>
+              prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
+            );
+            load();
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "DELETE",
+            schema: "public",
+            table: "tasks",
+            filter: `task_list_id=eq.${taskListId}`,
+          },
+          (payload) => {
+            const deleted = payload.old as { id: string };
+            setTasks((prev) => prev.filter((t) => t.id !== deleted.id));
+            load();
+          }
+        )
+        .subscribe();
+
+      // user:{uid} — tasks assigned to the current user across all lists.
+      // Fires when someone assigns or unassigns this user; reload to reflect changes
+      // in the current list if the assignment affects a task here.
+      userChannelRef.current = supabase
+        .channel(`user:${uid}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "tasks",
+            filter: `assignee_id=eq.${uid}`,
+          },
+          () => {
+            load();
+          }
+        )
+        .subscribe();
+    });
+
+    return () => {
+      if (sharedChannelRef.current) supabase.removeChannel(sharedChannelRef.current);
+      if (userChannelRef.current) supabase.removeChannel(userChannelRef.current);
+    };
   }, [load, taskListId]);
 
   const create = async (task: Omit<Task, "id" | "creator_id" | "completed_at" | "updated_at">) => {
