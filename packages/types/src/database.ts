@@ -6,7 +6,7 @@
 
 export type PermissionLevel = "full" | "free_busy" | "none";
 export type RelationshipStatus = "pending" | "active" | "declined" | "removed";
-export type EventAttendeeStatus = "invited" | "accepted" | "declined";
+export type EventAttendeeStatus = "invited" | "accepted" | "declined" | "tentative";
 export type TaskStatus = "todo" | "in_progress" | "complete";
 
 export interface User {
