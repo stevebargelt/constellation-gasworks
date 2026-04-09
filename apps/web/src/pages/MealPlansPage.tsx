@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth, useMealPlans } from "@constellation/hooks";
+import { useAuth, useMealPlans, useLivingSpaces } from "@constellation/hooks";
 
 function formatWeekStart(dateStr: string): string {
   // dateStr is YYYY-MM-DD
@@ -12,6 +12,7 @@ function formatWeekStart(dateStr: string): string {
 export default function MealPlansPage() {
   const { user } = useAuth();
   const { mealPlans, loading, error, create, remove } = useMealPlans();
+  const { livingSpaces } = useLivingSpaces();
   const navigate = useNavigate();
 
   const [title, setTitle] = useState("");
@@ -24,14 +25,18 @@ export default function MealPlansPage() {
     monday.setDate(today.getDate() + diff);
     return monday.toISOString().slice(0, 10);
   });
+  const [livingSpaceId, setLivingSpaceId] = useState<string>("");
   const [creating, setCreating] = useState(false);
+
+  const spaceMap = new Map(livingSpaces.map((s) => [s.id, s.name]));
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || creating) return;
     setCreating(true);
-    const result = await create({ title: title.trim(), week_start_date: weekStart, living_space_id: null });
+    const result = await create({ title: title.trim(), week_start_date: weekStart, living_space_id: livingSpaceId || null });
     setTitle("");
+    setLivingSpaceId("");
     setCreating(false);
     if (result) navigate(`/meal-plans/${result.id}`);
   }
@@ -64,6 +69,21 @@ export default function MealPlansPage() {
             onChange={(e) => setWeekStart(e.target.value)}
           />
         </div>
+        {livingSpaces.length > 0 && (
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-gray-400">Living space:</label>
+            <select
+              className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-white"
+              value={livingSpaceId}
+              onChange={(e) => setLivingSpaceId(e.target.value)}
+            >
+              <option value="">None</option>
+              {livingSpaces.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <button
           type="submit"
           disabled={creating || !title.trim()}
@@ -89,6 +109,9 @@ export default function MealPlansPage() {
                 </Link>
                 <p className="text-xs text-gray-400 mt-0.5">
                   Week of {formatWeekStart(plan.week_start_date)}
+                  {plan.living_space_id && spaceMap.get(plan.living_space_id) && (
+                    <span className="ml-2 text-indigo-400">· {spaceMap.get(plan.living_space_id)}</span>
+                  )}
                 </p>
               </div>
               {plan.creator_id === user?.id && (

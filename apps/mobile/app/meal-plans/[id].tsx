@@ -10,8 +10,8 @@ import {
   Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useAuth, useMealPlan, useRelationships } from "@constellation/hooks";
-import { getRecipes, getUsersByIds } from "@constellation/api";
+import { useAuth, useMealPlan, useRelationships, useLivingSpaces } from "@constellation/hooks";
+import { getRecipes, getUsersByIds, getLivingSpaceMembersWithProfiles } from "@constellation/api";
 import type { MealPlanDay, Recipe, User } from "@constellation/types";
 import { theme } from "../../src/theme";
 
@@ -130,12 +130,14 @@ export default function MealPlanDetailScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { relationships } = useRelationships();
+  const { livingSpaces } = useLivingSpaces();
 
   const { plan, days, members, loading, error, upsertDay, clearDay, deletePlan, addMember, removeMember } =
     useMealPlan(id!);
 
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [partners, setPartners] = useState<User[]>([]);
+  const [spaceMembers, setSpaceMembers] = useState<User[]>([]);
   const [userMap, setUserMap] = useState<Map<string, User>>(new Map());
 
   useEffect(() => {
@@ -152,6 +154,13 @@ export default function MealPlanDetailScreen() {
   }, [relationships, user]);
 
   useEffect(() => {
+    if (!plan?.living_space_id) { setSpaceMembers([]); return; }
+    getLivingSpaceMembersWithProfiles(plan.living_space_id).then((rows) =>
+      setSpaceMembers(rows.map((r) => r.user))
+    );
+  }, [plan?.living_space_id]);
+
+  useEffect(() => {
     const ids = members.map((m) => m.user_id);
     if (!ids.length) return;
     getUsersByIds(ids).then((users) =>
@@ -160,7 +169,15 @@ export default function MealPlanDetailScreen() {
   }, [members]);
 
   const existingMemberIds = useMemo(() => new Set(members.map((m) => m.user_id)), [members]);
-  const availablePartners = partners.filter((p) => !existingMemberIds.has(p.id));
+
+  const allInvitablePeople = useMemo<User[]>(() => {
+    const map = new Map<string, User>();
+    partners.forEach((p) => map.set(p.id, p));
+    spaceMembers.forEach((m) => map.set(m.id, m));
+    return [...map.values()];
+  }, [partners, spaceMembers]);
+
+  const availablePartners = allInvitablePeople.filter((p) => !existingMemberIds.has(p.id));
 
   function getSlot(dayOfWeek: number, mealType: string): MealPlanDay | undefined {
     return days.find((d) => d.day_of_week === dayOfWeek && d.meal_type === mealType);
@@ -242,7 +259,12 @@ export default function MealPlanDetailScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.heading}>{plan.title}</Text>
-          <Text style={styles.headingSub}>Week of {plan.week_start_date}</Text>
+          <Text style={styles.headingSub}>
+            Week of {plan.week_start_date}
+            {plan.living_space_id && livingSpaces.find((s) => s.id === plan.living_space_id)
+              ? `  ·  ${livingSpaces.find((s) => s.id === plan.living_space_id)!.name}`
+              : ""}
+          </Text>
         </View>
         {isCreator && (
           <TouchableOpacity onPress={handleDelete} hitSlop={8}>

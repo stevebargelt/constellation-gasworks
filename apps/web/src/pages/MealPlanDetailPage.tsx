@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useAuth, useMealPlan, useRelationships } from "@constellation/hooks";
-import { getRecipes, getUsersByIds } from "@constellation/api";
+import { useAuth, useMealPlan, useRelationships, useLivingSpaces } from "@constellation/hooks";
+import { getRecipes, getUsersByIds, getLivingSpaceMembersWithProfiles } from "@constellation/api";
 import type { MealPlanDay, Recipe, User } from "@constellation/types";
 
 // ---------- constants ----------
@@ -222,12 +222,14 @@ export default function MealPlanDetailPage() {
   const { user } = useAuth();
   const { relationships } = useRelationships();
   const navigate = useNavigate();
+  const { livingSpaces } = useLivingSpaces();
 
   const { plan, days, members, loading, error, upsertDay, clearDay, deletePlan, addMember, removeMember } =
     useMealPlan(id!);
 
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [partners, setPartners] = useState<User[]>([]);
+  const [spaceMembers, setSpaceMembers] = useState<User[]>([]);
 
   useEffect(() => {
     getRecipes().then(setRecipes);
@@ -241,6 +243,22 @@ export default function MealPlanDetailPage() {
     if (!activeIds.length) { setPartners([]); return; }
     getUsersByIds(activeIds).then(setPartners);
   }, [relationships, user]);
+
+  // Load space members as suggested invitees when a living space is selected
+  useEffect(() => {
+    if (!plan?.living_space_id) { setSpaceMembers([]); return; }
+    getLivingSpaceMembersWithProfiles(plan.living_space_id).then((rows) =>
+      setSpaceMembers(rows.map((r) => r.user))
+    );
+  }, [plan?.living_space_id]);
+
+  // Merge partners and space members (deduplicated) as available invitees
+  const allInvitablePeople = useMemo<User[]>(() => {
+    const map = new Map<string, User>();
+    partners.forEach((p) => map.set(p.id, p));
+    spaceMembers.forEach((m) => map.set(m.id, m));
+    return [...map.values()];
+  }, [partners, spaceMembers]);
 
   function getSlot(dayOfWeek: number, mealType: string): MealPlanDay | undefined {
     return days.find((d) => d.day_of_week === dayOfWeek && d.meal_type === mealType);
@@ -266,7 +284,13 @@ export default function MealPlanDetailPage() {
           <Link to="/meal-plans" className="text-sm text-gray-400 hover:text-white">← Plans</Link>
           <div>
             <h1 className="text-xl font-bold">{plan.title}</h1>
-            <p className="text-xs text-gray-400 mt-0.5">Week of {plan.week_start_date}</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Week of {plan.week_start_date}
+              {plan.living_space_id && (() => {
+                const space = livingSpaces.find((s) => s.id === plan.living_space_id);
+                return space ? <span className="ml-2 text-indigo-400">· {space.name}</span> : null;
+              })()}
+            </p>
           </div>
         </div>
         {isCreator && (
@@ -283,7 +307,7 @@ export default function MealPlanDetailPage() {
           members={members}
           currentUserId={user?.id ?? ""}
           creatorId={plan.creator_id}
-          partners={partners}
+          partners={allInvitablePeople}
           onAdd={addMember}
           onRemove={removeMember}
         />

@@ -10,9 +10,9 @@ import {
   Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useAuth, useMealPlans } from "@constellation/hooks";
+import { useAuth, useMealPlans, useLivingSpaces } from "@constellation/hooks";
 import { theme } from "../../src/theme";
-import type { MealPlan } from "@constellation/types";
+import type { LivingSpace, MealPlan } from "@constellation/types";
 
 function formatWeekStart(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -33,17 +33,21 @@ function mondayOfCurrentWeek(): string {
 
 interface PlanItemProps {
   plan: MealPlan;
+  spaceName: string | undefined;
   currentUserId: string;
   onOpen: (id: string) => void;
   onDelete: (plan: MealPlan) => void;
 }
 
-function PlanItem({ plan, currentUserId, onOpen, onDelete }: PlanItemProps) {
+function PlanItem({ plan, spaceName, currentUserId, onOpen, onDelete }: PlanItemProps) {
   return (
     <TouchableOpacity onPress={() => onOpen(plan.id)} style={styles.card}>
       <View style={styles.cardContent}>
         <Text style={styles.planTitle}>{plan.title}</Text>
-        <Text style={styles.planSub}>Week of {formatWeekStart(plan.week_start_date)}</Text>
+        <Text style={styles.planSub}>
+          Week of {formatWeekStart(plan.week_start_date)}
+          {spaceName ? `  ·  ${spaceName}` : ""}
+        </Text>
       </View>
       {plan.creator_id === currentUserId && (
         <TouchableOpacity onPress={() => onDelete(plan)} hitSlop={8} style={styles.deleteBtn}>
@@ -60,16 +64,21 @@ export default function MealPlansScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { mealPlans, loading, error, create, remove } = useMealPlans();
+  const { livingSpaces } = useLivingSpaces();
 
   const [title, setTitle] = useState("");
   const [weekStart] = useState(mondayOfCurrentWeek);
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string>("");
   const [creating, setCreating] = useState(false);
+
+  const spaceMap = new Map(livingSpaces.map((s: LivingSpace) => [s.id, s.name]));
 
   async function handleCreate() {
     if (!title.trim() || creating) return;
     setCreating(true);
-    const result = await create({ title: title.trim(), week_start_date: weekStart, living_space_id: null });
+    const result = await create({ title: title.trim(), week_start_date: weekStart, living_space_id: selectedSpaceId || null });
     setTitle("");
+    setSelectedSpaceId("");
     setCreating(false);
     if (result) router.push(`/meal-plans/${result.id}`);
   }
@@ -83,6 +92,19 @@ export default function MealPlansScreen() {
         { text: "Delete", style: "destructive", onPress: () => remove(plan.id) },
       ]
     );
+  }
+
+  function promptSpacePicker() {
+    if (!livingSpaces.length) return;
+    const options = [
+      { text: "None", onPress: () => setSelectedSpaceId("") },
+      ...livingSpaces.map((s: LivingSpace) => ({
+        text: s.name,
+        onPress: () => setSelectedSpaceId(s.id),
+      })),
+      { text: "Cancel", style: "cancel" as const },
+    ];
+    Alert.alert("Select living space", undefined, options);
   }
 
   return (
@@ -106,6 +128,13 @@ export default function MealPlansScreen() {
           returnKeyType="done"
         />
         <Text style={styles.createSub}>Week of {formatWeekStart(weekStart)}</Text>
+        {livingSpaces.length > 0 && (
+          <TouchableOpacity onPress={promptSpacePicker} style={styles.spacePickerBtn}>
+            <Text style={styles.spacePickerText}>
+              {selectedSpaceId ? `Space: ${spaceMap.get(selectedSpaceId)}` : "Living space: None"}
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           onPress={handleCreate}
           disabled={creating || !title.trim()}
@@ -131,6 +160,7 @@ export default function MealPlansScreen() {
           renderItem={({ item }) => (
             <PlanItem
               plan={item}
+              spaceName={item.living_space_id ? spaceMap.get(item.living_space_id) : undefined}
               currentUserId={user?.id ?? ""}
               onOpen={(id) => router.push(`/meal-plans/${id}`)}
               onDelete={handleDelete}
@@ -185,6 +215,13 @@ const styles = StyleSheet.create({
   createSub: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.neutral[400],
+  },
+  spacePickerBtn: {
+    paddingVertical: theme.spacing[1],
+  },
+  spacePickerText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.primary[400],
   },
   createBtn: {
     backgroundColor: theme.colors.primary[600],
