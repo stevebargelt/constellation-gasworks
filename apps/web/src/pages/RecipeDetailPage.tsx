@@ -5,11 +5,11 @@ import {
   createRecipe,
   updateRecipe,
   getRecipeIngredients,
+  getRecipeShares,
   replaceRecipeIngredients,
-  shareRecipe,
   getUsersByIds,
 } from "@constellation/api";
-import type { Recipe, RecipeIngredient, User } from "@constellation/types";
+import type { Recipe, RecipeIngredient, RecipeShare, User } from "@constellation/types";
 
 // ---------- tag input ----------
 
@@ -168,24 +168,51 @@ function IngredientEditor({ ingredients, onChange }: IngredientEditorProps) {
   );
 }
 
-// ---------- share dropdown ----------
+// ---------- share panel (owner only) ----------
 
-interface ShareDropdownProps {
+interface SharePanelProps {
   recipeId: string;
   partners: User[];
+  onShare: (userId: string) => Promise<void>;
+  onRevoke: (userId: string) => Promise<void>;
 }
 
-function ShareDropdown({ recipeId, partners }: ShareDropdownProps) {
+function SharePanel({ recipeId, partners, onShare, onRevoke }: SharePanelProps) {
   const [open, setOpen] = useState(false);
-  const [shared, setShared] = useState<Set<string>>(new Set());
+  const [shares, setShares] = useState<RecipeShare[]>([]);
+  const [sharedUserMap, setSharedUserMap] = useState<Map<string, User>>(new Map());
 
-  if (!partners.length) return null;
+  useEffect(() => {
+    getRecipeShares(recipeId).then((rows) => {
+      setShares(rows);
+      if (rows.length) {
+        getUsersByIds(rows.map((r) => r.shared_with_id)).then((users) =>
+          setSharedUserMap(new Map(users.map((u) => [u.id, u])))
+        );
+      }
+    });
+  }, [recipeId]);
+
+  const sharedWithIds = useMemo(() => new Set(shares.map((s) => s.shared_with_id)), [shares]);
+  const availablePartners = partners.filter((p) => !sharedWithIds.has(p.id));
 
   async function handleShare(userId: string) {
-    await shareRecipe(recipeId, userId);
-    setShared((prev) => new Set([...prev, userId]));
-    setOpen(false);
+    await onShare(userId);
+    const rows = await getRecipeShares(recipeId);
+    setShares(rows);
+    if (rows.length) {
+      getUsersByIds(rows.map((r) => r.shared_with_id)).then((users) =>
+        setSharedUserMap(new Map(users.map((u) => [u.id, u])))
+      );
+    }
   }
+
+  async function handleRevoke(userId: string) {
+    await onRevoke(userId);
+    setShares((prev) => prev.filter((s) => s.shared_with_id !== userId));
+  }
+
+  if (!partners.length && !shares.length) return null;
 
   return (
     <div className="relative">
@@ -193,21 +220,46 @@ function ShareDropdown({ recipeId, partners }: ShareDropdownProps) {
         onClick={() => setOpen((v) => !v)}
         className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm"
       >
-        Share
+        Share{shares.length > 0 ? ` (${shares.length})` : ""}
       </button>
       {open && (
-        <div className="absolute right-0 top-8 z-20 bg-gray-800 border border-gray-700 rounded shadow-lg min-w-44">
-          {partners.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => handleShare(p.id)}
-              disabled={shared.has(p.id)}
-              className="flex items-center justify-between w-full text-left px-3 py-2 text-sm hover:bg-gray-700 disabled:opacity-50"
-            >
-              {p.display_name}
-              {shared.has(p.id) && <span className="text-green-400 text-xs">✓</span>}
-            </button>
-          ))}
+        <div className="absolute right-0 top-9 z-20 bg-gray-800 border border-gray-700 rounded shadow-lg min-w-52 p-2 space-y-2">
+          {shares.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 px-1 mb-1">Shared with</p>
+              {shares.map((s) => {
+                const u = sharedUserMap.get(s.shared_with_id);
+                return (
+                  <div key={s.shared_with_id} className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-700">
+                    <span className="text-sm">{u?.display_name ?? s.shared_with_id.slice(0, 8)}</span>
+                    <button
+                      onClick={() => handleRevoke(s.shared_with_id)}
+                      className="text-xs text-red-400 hover:text-red-300 ml-3"
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {availablePartners.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 px-1 mb-1">Share with</p>
+              {availablePartners.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => handleShare(p.id)}
+                  className="flex w-full text-left px-2 py-1.5 text-sm rounded hover:bg-gray-700"
+                >
+                  {p.display_name}
+                </button>
+              ))}
+            </div>
+          )}
+          {!availablePartners.length && !shares.length && (
+            <p className="text-xs text-gray-500 px-1">No partners to share with.</p>
+          )}
         </div>
       )}
     </div>
@@ -244,13 +296,17 @@ export default function RecipeDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { relationships } = useRelationships();
-  const { recipes, updateRecipe: updateRecipeHook, deleteRecipe: remove } = useRecipes();
+  const { recipes, sharedRecipes, updateRecipe: updateRecipeHook, deleteRecipe: remove, shareRecipe, revokeShare, copyRecipe } = useRecipes();
 
-  const recipe = useMemo(() => recipes.find((r) => r.id === id), [recipes, id]);
+  const recipe = useMemo(
+    () => recipes.find((r) => r.id === id) ?? sharedRecipes.find((r) => r.id === id),
+    [recipes, sharedRecipes, id]
+  );
 
   const [editing, setEditing] = useState(isNew);
   const [form, setForm] = useState<RecipeFormValues>(defaultForm());
   const [saving, setSaving] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [partners, setPartners] = useState<User[]>([]);
 
   // Load ingredients when viewing an existing recipe
@@ -276,7 +332,7 @@ export default function RecipeDetailPage() {
     });
   }, [recipe, editing]);
 
-  // Load partners for share dropdown
+  // Load partners for share panel
   useEffect(() => {
     if (!user) return;
     const ids = relationships
@@ -321,9 +377,18 @@ export default function RecipeDetailPage() {
     navigate("/recipes");
   }
 
-  const isOwner = !recipe || recipe.owner_id === user?.id;
+  async function handleCopy() {
+    if (!recipe) return;
+    setCopying(true);
+    const copy = await copyRecipe(recipe.id);
+    setCopying(false);
+    if (copy) navigate(`/recipes/${copy.id}`);
+  }
 
-  if (!isNew && !recipe && recipes.length > 0) {
+  const isOwner = !recipe || recipe.owner_id === user?.id;
+  const isShared = !isOwner && !!recipe;
+
+  if (!isNew && !recipe && recipes.length > 0 && sharedRecipes.length > 0) {
     return <div className="p-8 text-gray-400">Recipe not found.</div>;
   }
 
@@ -342,7 +407,26 @@ export default function RecipeDetailPage() {
         </div>
         {!editing && recipe && (
           <div className="flex items-center gap-2">
-            <ShareDropdown recipeId={recipe.id} partners={partners} />
+            {isShared && (
+              <>
+                <span className="text-xs text-indigo-400 bg-indigo-900/40 px-2 py-1 rounded-full">shared with you</span>
+                <button
+                  onClick={handleCopy}
+                  disabled={copying}
+                  className="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 disabled:opacity-40 rounded text-sm"
+                >
+                  {copying ? "Saving…" : "Save a copy"}
+                </button>
+              </>
+            )}
+            {isOwner && (
+              <SharePanel
+                recipeId={recipe.id}
+                partners={partners}
+                onShare={(uid) => shareRecipe(recipe.id, uid)}
+                onRevoke={(uid) => revokeShare(recipe.id, uid)}
+              />
+            )}
             {isOwner && (
               <>
                 <button

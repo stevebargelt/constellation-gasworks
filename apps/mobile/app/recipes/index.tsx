@@ -15,7 +15,7 @@ import { theme } from "../../src/theme";
 
 export default function RecipesScreen() {
   const router = useRouter();
-  const { recipes, loading, error } = useRecipes();
+  const { recipes, sharedRecipes, loading, error } = useRecipes();
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
 
@@ -32,6 +32,12 @@ export default function RecipesScreen() {
       return matchesSearch && matchesTag;
     });
   }, [recipes, search, tagFilter]);
+
+  const filteredShared = useMemo(() => {
+    return sharedRecipes.filter((r) =>
+      !search.trim() || r.title.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [sharedRecipes, search]);
 
   return (
     <View style={styles.container}>
@@ -79,42 +85,79 @@ export default function RecipesScreen() {
         <ActivityIndicator color={theme.colors.primary[400]} style={{ marginTop: 32 }} />
       ) : error ? (
         <Text style={styles.errorText}>{error.message}</Text>
-      ) : filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>
-            {recipes.length === 0
-              ? "No recipes yet. Tap + New to create one!"
-              : "No recipes match your filters."}
-          </Text>
-        </View>
       ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(r) => r.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => router.push(`/recipes/${item.id}`)}
-            >
-              <View style={styles.cardMain}>
-                <Text style={styles.recipeTitle}>{item.title}</Text>
-                {item.servings != null && (
-                  <Text style={styles.recipeSub}>Serves {item.servings}</Text>
-                )}
-              </View>
-              {item.tags.length > 0 && (
-                <View style={styles.tagsRow}>
-                  {item.tags.map((tag) => (
-                    <View key={tag} style={styles.tagBadge}>
-                      <Text style={styles.tagBadgeText}>{tag}</Text>
-                    </View>
-                  ))}
+        <ScrollView contentContainerStyle={styles.list}>
+          {/* my recipes section */}
+          <Text style={styles.sectionHeader}>MY RECIPES</Text>
+          {filtered.length === 0 ? (
+            <Text style={styles.emptyText}>
+              {recipes.length === 0
+                ? "No recipes yet. Tap + New to create one!"
+                : "No recipes match your filters."}
+            </Text>
+          ) : (
+            filtered.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.card}
+                onPress={() => router.push(`/recipes/${item.id}`)}
+              >
+                <View style={styles.cardMain}>
+                  <Text style={styles.recipeTitle}>{item.title}</Text>
+                  {item.servings != null && (
+                    <Text style={styles.recipeSub}>Serves {item.servings}</Text>
+                  )}
                 </View>
-              )}
-            </TouchableOpacity>
+                {item.tags.length > 0 && (
+                  <View style={styles.tagsRow}>
+                    {item.tags.map((tag) => (
+                      <View key={tag} style={styles.tagBadge}>
+                        <Text style={styles.tagBadgeText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))
           )}
-        />
+
+          {/* shared with me section */}
+          {(filteredShared.length > 0 || sharedRecipes.length > 0) && (
+            <>
+              <Text style={[styles.sectionHeader, { marginTop: theme.spacing[6] }]}>SHARED WITH ME</Text>
+              {filteredShared.length === 0 ? (
+                <Text style={styles.emptyText}>No shared recipes match your search.</Text>
+              ) : (
+                filteredShared.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.card, styles.sharedCard]}
+                    onPress={() => router.push(`/recipes/${item.id}`)}
+                  >
+                    <View style={styles.cardMain}>
+                      <Text style={styles.recipeTitle}>{item.title}</Text>
+                      <View style={styles.sharedBadge}>
+                        <Text style={styles.sharedBadgeText}>shared</Text>
+                      </View>
+                    </View>
+                    {item.servings != null && (
+                      <Text style={styles.recipeSub}>Serves {item.servings}</Text>
+                    )}
+                    {item.tags.length > 0 && (
+                      <View style={styles.tagsRow}>
+                        {item.tags.map((tag) => (
+                          <View key={tag} style={styles.tagBadge}>
+                            <Text style={styles.tagBadgeText}>{tag}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
+            </>
+          )}
+        </ScrollView>
       )}
     </View>
   );
@@ -181,13 +224,24 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing[8],
     gap: theme.spacing[3],
   },
+  sectionHeader: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.neutral[400],
+    fontWeight: theme.fontWeight.medium,
+    letterSpacing: 0.8,
+    marginBottom: theme.spacing[1],
+  },
   card: {
     backgroundColor: theme.colors.neutral[800],
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing[4],
     gap: theme.spacing[1],
   },
-  cardMain: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  sharedCard: {
+    borderWidth: 1,
+    borderColor: theme.colors.neutral[700],
+  },
+  cardMain: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: theme.spacing[2] },
   recipeTitle: {
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.medium,
@@ -195,6 +249,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   recipeSub: { fontSize: theme.fontSize.xs, color: theme.colors.neutral[400] },
+  sharedBadge: {
+    backgroundColor: "#1e1b4b",
+    borderRadius: 999,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+  },
+  sharedBadgeText: { fontSize: theme.fontSize.xs, color: "#a5b4fc" },
   tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing[1], marginTop: theme.spacing[1] },
   tagBadge: {
     backgroundColor: theme.colors.neutral[700],
@@ -203,7 +264,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   tagBadgeText: { fontSize: theme.fontSize.xs, color: theme.colors.neutral[300] },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing[8] },
-  emptyText: { color: theme.colors.neutral[500], fontSize: theme.fontSize.sm, textAlign: "center" },
+  emptyText: { color: theme.colors.neutral[500], fontSize: theme.fontSize.sm },
   errorText: { color: "#f87171", fontSize: theme.fontSize.sm, padding: theme.spacing[4] },
 });

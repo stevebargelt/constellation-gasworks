@@ -8,6 +8,7 @@ import {
   deleteRecipe as apiDeleteRecipe,
   shareRecipe as apiShareRecipe,
   revokeShare as apiRevokeShare,
+  copyRecipe as apiCopyRecipe,
 } from "@constellation/api";
 
 interface RecipesState {
@@ -20,6 +21,7 @@ interface RecipesState {
   deleteRecipe: (id: string) => Promise<void>;
   shareRecipe: (recipeId: string, userId: string) => Promise<void>;
   revokeShare: (recipeId: string, userId: string) => Promise<void>;
+  copyRecipe: (recipeId: string) => Promise<Recipe | null>;
 }
 
 export function useRecipes(): RecipesState {
@@ -66,5 +68,11 @@ export function useRecipes(): RecipesState {
     load();
   };
 
-  return { recipes, sharedRecipes, loading, error, createRecipe, updateRecipe, deleteRecipe, shareRecipe, revokeShare };
+  const copyRecipe = async (recipeId: string): Promise<Recipe | null> => {
+    const copy = await apiCopyRecipe(recipeId);
+    if (copy) load();
+    return copy;
+  };
+
+  return { recipes, sharedRecipes, loading, error, createRecipe, updateRecipe, deleteRecipe, shareRecipe, revokeShare, copyRecipe };
 }

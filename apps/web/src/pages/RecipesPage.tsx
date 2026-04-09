@@ -3,11 +3,11 @@ import { Link } from "react-router-dom";
 import { useRecipes } from "@constellation/hooks";
 
 export default function RecipesPage() {
-  const { recipes, loading, error } = useRecipes();
+  const { recipes, sharedRecipes, loading, error } = useRecipes();
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
 
-  // Collect all unique tags across recipes
+  // Collect all unique tags across own recipes
   const allTags = useMemo(() => {
     const set = new Set<string>();
     recipes.forEach((r) => r.tags.forEach((t) => set.add(t)));
@@ -24,6 +24,12 @@ export default function RecipesPage() {
       return matchesSearch && matchesTag;
     });
   }, [recipes, search, tagFilter]);
+
+  const filteredShared = useMemo(() => {
+    return sharedRecipes.filter((r) =>
+      !search.trim() || r.title.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [sharedRecipes, search]);
 
   if (loading) return <div className="p-8 text-gray-400">Loading recipes…</div>;
   if (error) return <div className="p-8 text-red-400">{error.message}</div>;
@@ -76,14 +82,15 @@ export default function RecipesPage() {
         </div>
       </div>
 
-      {/* recipe list */}
-      {filtered.length === 0 ? (
-        <p className="text-gray-500 text-sm">
-          {recipes.length === 0 ? "No recipes yet. Create your first one!" : "No recipes match your filters."}
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map((recipe) => (
+      {/* my recipes */}
+      <div className="space-y-3">
+        <h2 className="text-xs font-medium text-gray-400 uppercase tracking-wide">My Recipes</h2>
+        {filtered.length === 0 ? (
+          <p className="text-gray-500 text-sm">
+            {recipes.length === 0 ? "No recipes yet. Create your first one!" : "No recipes match your filters."}
+          </p>
+        ) : (
+          filtered.map((recipe) => (
             <Link
               key={recipe.id}
               to={`/recipes/${recipe.id}`}
@@ -110,7 +117,46 @@ export default function RecipesPage() {
                 <p className="text-xs text-gray-400 mt-2 line-clamp-1">{recipe.notes}</p>
               )}
             </Link>
-          ))}
+          ))
+        )}
+      </div>
+
+      {/* shared with me */}
+      {(filteredShared.length > 0 || sharedRecipes.length > 0) && (
+        <div className="space-y-3">
+          <h2 className="text-xs font-medium text-gray-400 uppercase tracking-wide">Shared with Me</h2>
+          {filteredShared.length === 0 ? (
+            <p className="text-gray-500 text-sm">No shared recipes match your search.</p>
+          ) : (
+            filteredShared.map((recipe) => (
+              <Link
+                key={recipe.id}
+                to={`/recipes/${recipe.id}`}
+                className="block bg-gray-800 border border-gray-700 rounded-lg p-4 hover:bg-gray-750 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-medium">{recipe.title}</h2>
+                      <span className="text-xs text-indigo-400 bg-indigo-900/40 px-2 py-0.5 rounded-full">shared</span>
+                    </div>
+                    {recipe.servings && (
+                      <p className="text-xs text-gray-400 mt-0.5">Serves {recipe.servings}</p>
+                    )}
+                  </div>
+                  {recipe.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 justify-end shrink-0">
+                      {recipe.tags.map((tag) => (
+                        <span key={tag} className="px-2 py-0.5 bg-gray-700 rounded-full text-xs text-gray-300">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Link>
+            ))
+          )}
         </div>
       )}
     </div>

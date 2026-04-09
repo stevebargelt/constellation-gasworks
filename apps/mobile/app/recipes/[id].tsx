@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -14,11 +14,11 @@ import { useAuth, useRecipes, useRelationships } from "@constellation/hooks";
 import {
   createRecipe,
   getRecipeIngredients,
+  getRecipeShares,
   replaceRecipeIngredients,
-  shareRecipe,
   getUsersByIds,
 } from "@constellation/api";
-import type { RecipeIngredient, User } from "@constellation/types";
+import type { RecipeIngredient, RecipeShare, User } from "@constellation/types";
 import { theme } from "../../src/theme";
 
 type DraftIngredient = Omit<RecipeIngredient, "id" | "recipe_id">;
@@ -82,9 +82,12 @@ export default function RecipeDetailScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { relationships } = useRelationships();
-  const { recipes, updateRecipe: updateRecipeHook, deleteRecipe: remove } = useRecipes();
+  const { recipes, sharedRecipes, updateRecipe: updateRecipeHook, deleteRecipe: remove, shareRecipe, revokeShare, copyRecipe } = useRecipes();
 
-  const recipe = recipes.find((r) => r.id === id);
+  const recipe = useMemo(
+    () => recipes.find((r) => r.id === id) ?? sharedRecipes.find((r) => r.id === id),
+    [recipes, sharedRecipes, id]
+  );
 
   const [editing, setEditing] = useState(isNew);
   const [title, setTitle] = useState("");
@@ -95,7 +98,10 @@ export default function RecipeDetailScreen() {
   const [tagInput, setTagInput] = useState("");
   const [ingredients, setIngredients] = useState<DraftIngredient[]>([]);
   const [saving, setSaving] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [partners, setPartners] = useState<User[]>([]);
+  const [shares, setShares] = useState<RecipeShare[]>([]);
+  const [sharedUserMap, setSharedUserMap] = useState<Map<string, User>>(new Map());
 
   // Load recipe data into form
   useEffect(() => {
@@ -125,6 +131,22 @@ export default function RecipeDetailScreen() {
     if (!ids.length) { setPartners([]); return; }
     getUsersByIds(ids).then(setPartners);
   }, [relationships, user]);
+
+  // Load existing shares (owner only)
+  useEffect(() => {
+    if (!recipe || recipe.owner_id !== user?.id) return;
+    getRecipeShares(recipe.id).then((rows) => {
+      setShares(rows);
+      if (rows.length) {
+        getUsersByIds(rows.map((r) => r.shared_with_id)).then((users) =>
+          setSharedUserMap(new Map(users.map((u) => [u.id, u])))
+        );
+      }
+    });
+  }, [recipe?.id, user?.id]);
+
+  const sharedWithIds = useMemo(() => new Set(shares.map((s) => s.shared_with_id)), [shares]);
+  const availablePartners = partners.filter((p) => !sharedWithIds.has(p.id));
 
   function addTag() {
     const trimmed = tagInput.trim().toLowerCase();
@@ -213,23 +235,71 @@ export default function RecipeDetailScreen() {
   }
 
   function handleShare() {
-    if (!recipe || !partners.length) return;
+    if (!recipe) return;
+
+    const shareOptions = availablePartners.map((p) => ({
+      text: p.display_name,
+      onPress: async () => {
+        await shareRecipe(recipe.id, p.id);
+        // Reload shares
+        const rows = await getRecipeShares(recipe.id);
+        setShares(rows);
+        if (rows.length) {
+          getUsersByIds(rows.map((r) => r.shared_with_id)).then((users) =>
+            setSharedUserMap(new Map(users.map((u) => [u.id, u])))
+          );
+        }
+        Alert.alert("Shared", `Recipe shared with ${p.display_name}.`);
+      },
+    }));
+
+    const revokeOptions = shares.map((s) => {
+      const name = sharedUserMap.get(s.shared_with_id)?.display_name ?? s.shared_with_id.slice(0, 8);
+      return {
+        text: `Revoke: ${name}`,
+        style: "destructive" as const,
+        onPress: async () => {
+          await revokeShare(recipe.id, s.shared_with_id);
+          setShares((prev) => prev.filter((x) => x.shared_with_id !== s.shared_with_id));
+        },
+      };
+    });
+
+    const allOptions = [
+      ...shareOptions,
+      ...revokeOptions,
+      { text: "Cancel", style: "cancel" as const },
+    ];
+
+    if (allOptions.length === 1) {
+      Alert.alert("Share", "No partners available to share with.");
+      return;
+    }
+
     Alert.alert(
       "Share recipe",
-      "Share with:",
-      [
-        ...partners.map((p) => ({
-          text: p.display_name,
-          onPress: () => shareRecipe(recipe.id, p.id).then(() =>
-            Alert.alert("Shared", `Recipe shared with ${p.display_name}.`)
-          ),
-        })),
-        { text: "Cancel", style: "cancel" as const },
-      ]
+      shares.length > 0 ? "Share with a partner or revoke access:" : "Share with:",
+      allOptions
     );
   }
 
-  if (!isNew && !recipe && recipes.length > 0) {
+  async function handleCopy() {
+    if (!recipe) return;
+    setCopying(true);
+    const copy = await copyRecipe(recipe.id);
+    setCopying(false);
+    if (copy) {
+      Alert.alert("Saved!", `"${copy.title}" has been saved to your recipes.`, [
+        { text: "View", onPress: () => router.replace(`/recipes/${copy.id}`) },
+        { text: "OK" },
+      ]);
+    }
+  }
+
+  const isOwner = !recipe || recipe.owner_id === user?.id;
+  const isShared = !isOwner && !!recipe;
+
+  if (!isNew && !recipe && recipes.length > 0 && sharedRecipes.length > 0) {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>Recipe not found.</Text>
@@ -245,8 +315,6 @@ export default function RecipeDetailScreen() {
     );
   }
 
-  const isOwner = !recipe || recipe.owner_id === user?.id;
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* header */}
@@ -259,9 +327,20 @@ export default function RecipeDetailScreen() {
         </Text>
         {!editing && recipe && (
           <View style={styles.headerActions}>
-            {partners.length > 0 && (
+            {isShared && (
+              <TouchableOpacity
+                onPress={handleCopy}
+                disabled={copying}
+                style={[styles.actionBtn, { backgroundColor: theme.colors.primary[700] }]}
+              >
+                <Text style={styles.actionBtnText}>{copying ? "Saving…" : "Save copy"}</Text>
+              </TouchableOpacity>
+            )}
+            {isOwner && (partners.length > 0 || shares.length > 0) && (
               <TouchableOpacity onPress={handleShare} style={styles.actionBtn}>
-                <Text style={styles.actionBtnText}>Share</Text>
+                <Text style={styles.actionBtnText}>
+                  Share{shares.length > 0 ? ` (${shares.length})` : ""}
+                </Text>
               </TouchableOpacity>
             )}
             {isOwner && (
@@ -277,6 +356,13 @@ export default function RecipeDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* shared badge */}
+      {isShared && recipe && (
+        <View style={styles.sharedBanner}>
+          <Text style={styles.sharedBannerText}>shared with you</Text>
+        </View>
+      )}
 
       {/* view mode */}
       {!editing && recipe && (
@@ -462,7 +548,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.semibold,
     color: theme.colors.neutral[50],
   },
-  headerActions: { flexDirection: "row", gap: theme.spacing[2] },
+  headerActions: { flexDirection: "row", gap: theme.spacing[2], flexWrap: "wrap" },
   actionBtn: {
     backgroundColor: theme.colors.neutral[700],
     paddingHorizontal: theme.spacing[3],
@@ -477,6 +563,16 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.md,
   },
   deleteActionBtnText: { fontSize: theme.fontSize.sm, color: "#fca5a5" },
+  sharedBanner: {
+    marginHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[2],
+    backgroundColor: "#1e1b4b",
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[1],
+    alignSelf: "flex-start",
+  },
+  sharedBannerText: { fontSize: theme.fontSize.xs, color: "#a5b4fc" },
   viewBody: { paddingHorizontal: theme.spacing[4], gap: theme.spacing[4] },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing[2], alignItems: "center" },
   metaText: { fontSize: theme.fontSize.sm, color: theme.colors.neutral[400] },
