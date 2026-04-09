@@ -54,6 +54,16 @@ export async function getRecipeIngredients(
   return data ?? [];
 }
 
+export async function getSharedRecipes(): Promise<Recipe[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data } = await supabase
+    .from("recipes")
+    .select("*")
+    .neq("owner_id", user.id);
+  return data ?? [];
+}
+
 export async function shareRecipe(
   recipeId: string,
   sharedWithId: string
@@ -64,4 +74,15 @@ export async function shareRecipe(
     .select()
     .single();
   return data;
+}
+
+export async function revokeShare(
+  recipeId: string,
+  sharedWithId: string
+): Promise<void> {
+  await supabase
+    .from("recipe_shares")
+    .delete()
+    .eq("recipe_id", recipeId)
+    .eq("shared_with_id", sharedWithId);
 }

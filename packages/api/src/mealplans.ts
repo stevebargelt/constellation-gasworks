@@ -72,6 +72,57 @@ export async function toggleShoppingListItem(
   return data;
 }
 
+export async function updateMealPlan(
+  id: string,
+  updates: Partial<Omit<MealPlan, "id" | "creator_id" | "updated_at">>
+): Promise<MealPlan | null> {
+  const { data } = await supabase
+    .from("meal_plans")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+  return data;
+}
+
+export async function deleteMealPlan(id: string): Promise<void> {
+  await supabase.from("meal_plans").delete().eq("id", id);
+}
+
+export async function deleteMealPlanDay(
+  mealPlanId: string,
+  dayOfWeek: number,
+  mealType: string
+): Promise<void> {
+  await supabase
+    .from("meal_plan_days")
+    .delete()
+    .eq("meal_plan_id", mealPlanId)
+    .eq("day_of_week", dayOfWeek)
+    .eq("meal_type", mealType);
+}
+
+export async function addMealPlanMember(
+  mealPlanId: string,
+  userId: string
+): Promise<MealPlanMember | null> {
+  const { data } = await supabase
+    .from("meal_plan_members")
+    .insert({ meal_plan_id: mealPlanId, user_id: userId })
+    .select()
+    .single();
+  return data;
+}
+
+export async function upsertShoppingListItems(
+  items: Omit<ShoppingListItem, "id" | "is_checked" | "checked_by_id" | "updated_at">[]
+): Promise<void> {
+  if (items.length === 0) return;
+  await supabase
+    .from("shopping_list_items")
+    .upsert(items, { onConflict: "meal_plan_id,ingredient_name" });
+}
+
 export async function getMealPlanMembers(
   mealPlanId: string
 ): Promise<MealPlanMember[]> {
