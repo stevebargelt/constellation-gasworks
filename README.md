@@ -62,7 +62,7 @@ supabase start
 cp .env.local.example .env.local
 
 # Apply migrations to local database
-supabase db push
+supabase db reset
 
 # Run web app
 pnpm --filter web dev
@@ -92,12 +92,14 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<sb_publishable_xxx>
 ## Deploying
 
 ```bash
-# Push migrations to production
+# Push migrations to production (remote Supabase project)
 supabase db push
 
 # Web deploys automatically via GitHub Actions on merge to main
 # Mobile builds via EAS Build on merge to main
 ```
+
+> **Local vs production**: `supabase db reset` applies migrations to your local instance. `supabase db push` applies them to the remote production project.
 
 ## Architecture
 
