@@ -98,3 +98,21 @@ export async function revokeShare(
     .eq("recipe_id", recipeId)
     .eq("shared_with_id", sharedWithId);
 }
+
+export async function replaceRecipeIngredients(
+  recipeId: string,
+  ingredients: Omit<RecipeIngredient, "id" | "recipe_id">[]
+): Promise<RecipeIngredient[]> {
+  await supabase.from("recipe_ingredients").delete().eq("recipe_id", recipeId);
+  if (!ingredients.length) return [];
+  const rows = ingredients.map((ing, i) => ({
+    ...ing,
+    recipe_id: recipeId,
+    sort_order: ing.sort_order ?? i,
+  }));
+  const { data } = await supabase
+    .from("recipe_ingredients")
+    .insert(rows)
+    .select();
+  return data ?? [];
+}
