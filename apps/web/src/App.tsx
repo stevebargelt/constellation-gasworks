@@ -16,6 +16,8 @@ import CalendarOverlayPage from "./pages/CalendarOverlayPage";
 import CalendarViewPage from "./pages/CalendarViewPage";
 import TaskListsPage from "./pages/TaskListsPage";
 import LivingSpacesPage from "./pages/LivingSpacesPage";
+import RecipesPage from "./pages/RecipesPage";
+import RecipeDetailPage from "./pages/RecipeDetailPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -48,6 +50,9 @@ function HomePage() {
           </Link>
           <Link to="/living-spaces" className="text-sm text-gray-400 hover:text-white">
             Living Spaces
+          </Link>
+          <Link to="/recipes" className="text-sm text-gray-400 hover:text-white">
+            Recipes
           </Link>
           <Link to="/invites" className="text-sm text-gray-400 hover:text-white">
             Invites
@@ -169,6 +174,22 @@ export default function App() {
           element={
             <ProtectedRoute>
               <LivingSpacesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/recipes"
+          element={
+            <ProtectedRoute>
+              <RecipesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/recipes/:id"
+          element={
+            <ProtectedRoute>
+              <RecipeDetailPage />
             </ProtectedRoute>
           }
         />
