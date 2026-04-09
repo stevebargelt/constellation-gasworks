@@ -64,7 +64,10 @@ cp .env.local.example .env.local
 # Apply migrations to local database
 supabase db reset
 
-# Run web app
+# Run all apps and packages in dev mode (recommended)
+pnpm dev
+
+# Or run web only (from repo root)
 pnpm --filter web dev
 
 # Run mobile app
