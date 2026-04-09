@@ -1,5 +1,6 @@
 import type { Relationship, RelationshipPermission } from "@constellation/types";
 import { supabase } from "./client";
+import { assignPersonColors } from "./colors";
 
 export async function getRelationships(): Promise<Relationship[]> {
   const { data } = await supabase.from("relationships").select("*");
@@ -36,6 +37,9 @@ export async function acceptRelationshipInvite(
     .eq("id", relationshipId)
     .select()
     .single();
+  if (data) {
+    await assignPersonColors(data);
+  }
   return data;
 }
 

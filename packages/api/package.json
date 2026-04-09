@@ -13,6 +13,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@constellation/theme": "workspace:*",
     "@constellation/types": "workspace:*",
     "@supabase/supabase-js": "^2.47.10"
   },

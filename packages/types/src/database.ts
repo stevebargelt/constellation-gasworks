@@ -6,6 +6,7 @@
 
 export type PermissionLevel = "full" | "free_busy" | "none";
 export type RelationshipStatus = "pending" | "active" | "declined" | "removed";
+export type RelType = "partner" | "nesting_partner" | "metamour" | "coparent" | "roommate" | "family" | "custom";
 export type EventAttendeeStatus = "invited" | "accepted" | "declined";
 export type TaskStatus = "todo" | "in_progress" | "complete";
 
@@ -157,6 +158,14 @@ export interface MealPlanDay {
   meal_type: string;
   recipe_id: string | null;
   free_text: string | null;
+}
+
+export interface UserColor {
+  id: string;
+  viewer_id: string;
+  target_user_id: string;
+  color: string;
+  created_at: string;
 }
 
 export interface ShoppingListItem {
