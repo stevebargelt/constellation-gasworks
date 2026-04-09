@@ -19,6 +19,7 @@ import TasksPage from "./pages/TasksPage";
 import LivingSpacesPage from "./pages/LivingSpacesPage";
 import MealPlansPage from "./pages/MealPlansPage";
 import MealPlanDetailPage from "./pages/MealPlanDetailPage";
+import ShoppingListPage from "./pages/ShoppingListPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -199,6 +200,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MealPlanDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/meal-plans/:id/shopping"
+          element={
+            <ProtectedRoute>
+              <ShoppingListPage />
             </ProtectedRoute>
           }
         />

@@ -38,5 +38,5 @@ export function aggregateIngredients(
     }
   }
 
-  return [...byKey.values()];
+  return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
 }

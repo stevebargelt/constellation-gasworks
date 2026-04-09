@@ -293,11 +293,19 @@ export default function MealPlanDetailPage() {
             </p>
           </div>
         </div>
-        {isCreator && (
-          <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-300 shrink-0">
-            Delete plan
-          </button>
-        )}
+        <div className="flex items-center gap-3 shrink-0">
+          <Link
+            to={`/meal-plans/${plan.id}/shopping`}
+            className="text-xs text-indigo-400 hover:text-indigo-300"
+          >
+            Shopping List →
+          </Link>
+          {isCreator && (
+            <button onClick={handleDelete} className="text-xs text-red-400 hover:text-red-300">
+              Delete plan
+            </button>
+          )}
+        </div>
       </div>
 
       {/* members */}

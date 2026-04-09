@@ -54,6 +54,18 @@ export async function getRecipeIngredients(
   return data ?? [];
 }
 
+export async function getRecipeIngredientsForRecipes(
+  recipeIds: string[]
+): Promise<RecipeIngredient[]> {
+  if (!recipeIds.length) return [];
+  const { data } = await supabase
+    .from("recipe_ingredients")
+    .select("*")
+    .in("recipe_id", recipeIds)
+    .order("sort_order");
+  return data ?? [];
+}
+
 export async function getSharedRecipes(): Promise<Recipe[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];

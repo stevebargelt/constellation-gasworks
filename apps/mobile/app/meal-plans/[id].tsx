@@ -266,11 +266,19 @@ export default function MealPlanDetailScreen() {
               : ""}
           </Text>
         </View>
-        {isCreator && (
-          <TouchableOpacity onPress={handleDelete} hitSlop={8}>
-            <Text style={styles.deleteText}>Delete</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <TouchableOpacity
+            onPress={() => router.push(`/meal-plans/shopping?id=${plan.id}`)}
+            hitSlop={8}
+          >
+            <Text style={styles.shoppingBtn}>List</Text>
           </TouchableOpacity>
-        )}
+          {isCreator && (
+            <TouchableOpacity onPress={handleDelete} hitSlop={8}>
+              <Text style={styles.deleteText}>Delete</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       {/* members */}
@@ -374,6 +382,11 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     color: theme.colors.neutral[400],
     marginTop: 2,
+  },
+  shoppingBtn: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.primary[400],
+    paddingTop: 2,
   },
   deleteText: {
     fontSize: theme.fontSize.xs,
