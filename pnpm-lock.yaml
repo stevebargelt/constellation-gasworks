@@ -161,6 +161,9 @@ importers:
       '@constellation/api':
         specifier: workspace:*
         version: link:../api
+      '@constellation/theme':
+        specifier: workspace:*
+        version: link:../theme
       '@constellation/types':
         specifier: workspace:*
         version: link:../types
