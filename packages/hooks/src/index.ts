@@ -10,3 +10,4 @@ export { useRecipes } from "./useRecipes";
 export { useMealPlan } from "./useMealPlan";
 export { useShoppingList } from "./useShoppingList";
 export { useLivingSpaces } from "./useLivingSpaces";
+export { useLivingSpaceMembers } from "./useLivingSpaceMembers";

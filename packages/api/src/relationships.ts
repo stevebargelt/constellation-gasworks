@@ -116,3 +116,31 @@ export async function upsertRelationshipPermission(
     .single();
   return data;
 }
+
+/**
+ * Returns active relationship partners of the current user with their user profiles.
+ */
+export async function getActivePartners(): Promise<User[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: rels } = await supabase
+    .from("relationships")
+    .select("user_a_id, user_b_id")
+    .eq("status", "active");
+
+  if (!rels || rels.length === 0) return [];
+
+  const partnerIds = rels.map((r) =>
+    r.user_a_id === user.id ? r.user_b_id : r.user_a_id
+  );
+
+  if (partnerIds.length === 0) return [];
+
+  const { data: users } = await supabase
+    .from("users")
+    .select("*")
+    .in("id", partnerIds);
+
+  return users ?? [];
+}
