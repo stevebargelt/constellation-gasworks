@@ -68,7 +68,8 @@ function eventFallsOnDay(event: VisibleCalendarEvent, day: Date): boolean {
   return start <= dayEnd && end >= dayStart;
 }
 
-const FALLBACK_COLOR = "#6366f1";
+const SELF_COLOR = "#94a3b8";   // slate-400 — reserved for the current user
+const FALLBACK_COLOR = "#6366f1"; // used when a partner has no assigned color yet
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // ---------- EventPill ----------
@@ -78,21 +79,23 @@ interface EventPillProps {
   color: string;
   onClick: () => void;
   compact?: boolean;
+  ownerName?: string;
 }
 
-function EventPill({ event, color, onClick, compact }: EventPillProps) {
+function EventPill({ event, color, onClick, compact, ownerName }: EventPillProps) {
   const isBusy = event.viewer_permission === "free_busy";
+  const label = isBusy && ownerName ? `${ownerName}: Busy` : event.title;
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       className="w-full text-left rounded px-1 py-0.5 text-xs truncate hover:opacity-80 transition-opacity"
       style={{ backgroundColor: color + "33", borderLeft: `2px solid ${color}`, color }}
-      title={event.title}
+      title={label}
     >
       {!compact && !event.is_all_day && (
         <span className="opacity-75 mr-1">{formatTime(event.start_time)}</span>
       )}
-      <span className={isBusy ? "italic" : ""}>{event.title}</span>
+      <span className={isBusy ? "italic" : ""}>{label}</span>
     </button>
   );
 }
@@ -103,12 +106,13 @@ interface MonthViewProps {
   anchor: Date;
   events: VisibleCalendarEvent[];
   getColor: (creatorId: string) => string;
+  getOwnerName: (creatorId: string) => string | undefined;
   onDayClick: (d: Date) => void;
   onEventClick: (e: VisibleCalendarEvent) => void;
   today: Date;
 }
 
-function MonthView({ anchor, events, getColor, onDayClick, onEventClick, today }: MonthViewProps) {
+function MonthView({ anchor, events, getColor, getOwnerName, onDayClick, onEventClick, today }: MonthViewProps) {
   const monthStart = startOfMonth(anchor);
   const gridStart = startOfWeek(monthStart);
 
@@ -188,6 +192,7 @@ function MonthView({ anchor, events, getColor, onDayClick, onEventClick, today }
                         color={getColor(ev.creator_id)}
                         onClick={() => onEventClick(ev)}
                         compact
+                        ownerName={getOwnerName(ev.creator_id)}
                       />
                     ))}
                     {overflow > 0 && (
@@ -210,12 +215,13 @@ interface WeekViewProps {
   anchor: Date;
   events: VisibleCalendarEvent[];
   getColor: (creatorId: string) => string;
+  getOwnerName: (creatorId: string) => string | undefined;
   onEventClick: (e: VisibleCalendarEvent) => void;
   onDayClick: (d: Date) => void;
   today: Date;
 }
 
-function WeekView({ anchor, events, getColor, onEventClick, onDayClick, today }: WeekViewProps) {
+function WeekView({ anchor, events, getColor, getOwnerName, onEventClick, onDayClick, today }: WeekViewProps) {
   const weekStart = startOfWeek(anchor);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -256,6 +262,7 @@ function WeekView({ anchor, events, getColor, onEventClick, onDayClick, today }:
                   event={ev}
                   color={getColor(ev.creator_id)}
                   onClick={() => onEventClick(ev)}
+                  ownerName={getOwnerName(ev.creator_id)}
                 />
               ))}
               {dayEvents.length === 0 && (
@@ -277,10 +284,11 @@ interface DayViewProps {
   anchor: Date;
   events: VisibleCalendarEvent[];
   getColor: (creatorId: string) => string;
+  getOwnerName: (creatorId: string) => string | undefined;
   onEventClick: (e: VisibleCalendarEvent) => void;
 }
 
-function DayView({ anchor, events, getColor, onEventClick }: DayViewProps) {
+function DayView({ anchor, events, getColor, getOwnerName, onEventClick }: DayViewProps) {
   const dayEvents = events.filter((ev) => eventFallsOnDay(ev, anchor));
   const allDay = dayEvents.filter((ev) => ev.is_all_day);
   const timed = dayEvents.filter((ev) => !ev.is_all_day);
@@ -292,7 +300,7 @@ function DayView({ anchor, events, getColor, onEventClick }: DayViewProps) {
         <div className="border-b border-gray-800 p-2 space-y-1">
           <span className="text-xs text-gray-500">All day</span>
           {allDay.map((ev) => (
-            <EventPill key={ev.id} event={ev} color={getColor(ev.creator_id)} onClick={() => onEventClick(ev)} compact />
+            <EventPill key={ev.id} event={ev} color={getColor(ev.creator_id)} onClick={() => onEventClick(ev)} compact ownerName={getOwnerName(ev.creator_id)} />
           ))}
         </div>
       )}
@@ -313,7 +321,7 @@ function DayView({ anchor, events, getColor, onEventClick }: DayViewProps) {
               </div>
               <div className="flex-1 p-1 space-y-1">
                 {hourEvents.map((ev) => (
-                  <EventPill key={ev.id} event={ev} color={getColor(ev.creator_id)} onClick={() => onEventClick(ev)} />
+                  <EventPill key={ev.id} event={ev} color={getColor(ev.creator_id)} onClick={() => onEventClick(ev)} ownerName={getOwnerName(ev.creator_id)} />
                 ))}
               </div>
             </div>
@@ -380,8 +388,13 @@ export default function CalendarViewPage() {
   }, [ownEvents, eventsByOwner, overlayIds, overlayEnabled]);
 
   function getColor(creatorId: string): string {
-    if (creatorId === authUser?.id) return FALLBACK_COLOR;
+    if (creatorId === authUser?.id) return SELF_COLOR;
     return userColors.get(creatorId) ?? FALLBACK_COLOR;
+  }
+
+  function getOwnerName(creatorId: string): string | undefined {
+    if (creatorId === authUser?.id) return undefined;
+    return connectionUsers.find((u) => u.id === creatorId)?.display_name;
   }
 
   // Navigation
@@ -428,7 +441,7 @@ export default function CalendarViewPage() {
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <Link to="/calendar" className="text-gray-400 hover:text-white text-sm">← List</Link>
+          <Link to="/calendar/list" className="text-gray-400 hover:text-white text-sm">← List</Link>
           <button
             onClick={goToday}
             className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm"
@@ -476,6 +489,24 @@ export default function CalendarViewPage() {
         </div>
       </div>
 
+      {/* People legend */}
+      {(authUser || connectionUsers.length > 0) && (
+        <div className="flex items-center gap-4 px-4 py-2 border-b border-gray-800 flex-shrink-0 flex-wrap">
+          {authUser && (
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: SELF_COLOR }} />
+              <span className="text-xs text-gray-300">You</span>
+            </div>
+          )}
+          {connectionUsers.map((u) => (
+            <div key={u.id} className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: userColors.get(u.id) ?? FALLBACK_COLOR }} />
+              <span className="text-xs text-gray-300">{u.display_name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Calendar body */}
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
@@ -488,6 +519,7 @@ export default function CalendarViewPage() {
               anchor={anchor}
               events={allEvents}
               getColor={getColor}
+              getOwnerName={getOwnerName}
               onDayClick={handleDayClick}
               onEventClick={handleEventClick}
               today={today}
@@ -498,6 +530,7 @@ export default function CalendarViewPage() {
               anchor={anchor}
               events={allEvents}
               getColor={getColor}
+              getOwnerName={getOwnerName}
               onEventClick={handleEventClick}
               onDayClick={handleDayClick}
               today={today}
@@ -508,6 +541,7 @@ export default function CalendarViewPage() {
               anchor={anchor}
               events={allEvents}
               getColor={getColor}
+              getOwnerName={getOwnerName}
               onEventClick={handleEventClick}
             />
           )}

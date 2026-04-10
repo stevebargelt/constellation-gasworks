@@ -36,11 +36,14 @@ export function useShoppingList(mealPlanId: string): ShoppingListState {
   useEffect(() => {
     load();
 
+    let cancelled = false;
+    const id = Math.random().toString(36).slice(2);
+
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
+      if (!user || cancelled) return;
 
       const channel = supabase
-        .channel(`shared:${user.id}`)
+        .channel(`shopping:${mealPlanId}:${id}`)
         .on(
           "postgres_changes",
           {
@@ -72,6 +75,7 @@ export function useShoppingList(mealPlanId: string): ShoppingListState {
     });
 
     return () => {
+      cancelled = true;
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;

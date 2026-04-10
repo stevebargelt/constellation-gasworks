@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { LivingSpace } from "@constellation/types";
 import {
   supabase,
@@ -21,6 +21,7 @@ export function useLivingSpaces(): LivingSpacesState {
   const [livingSpaces, setLivingSpaces] = useState<LivingSpace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const channelName = useRef(`living_spaces_changes-${Math.random()}`).current;
 
   const load = useCallback(() => {
     setLoading(true);
@@ -34,7 +35,7 @@ export function useLivingSpaces(): LivingSpacesState {
     load();
 
     const channel = supabase
-      .channel("living_spaces_changes")
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "living_spaces" },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Relationship } from "@constellation/types";
 import {
   supabase,
@@ -38,6 +38,9 @@ export function useRelationships(): RelationshipsState {
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  // Unique per hook instance so Strict Mode's double-invoke doesn't try to
+  // attach listeners to an already-subscribed channel.
+  const channelName = useRef(`relationships-changes-${Math.random()}`).current;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,7 +60,7 @@ export function useRelationships(): RelationshipsState {
     // Subscribe to realtime changes for the current user's relationships.
     // RLS ensures only rows visible to auth.uid() are returned on refetch.
     const channel = supabase
-      .channel("relationships-changes")
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "relationships" },

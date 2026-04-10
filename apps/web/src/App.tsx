@@ -150,15 +150,15 @@ export default function App() {
           path="/calendar"
           element={
             <ProtectedRoute>
-              <CalendarPage />
+              <CalendarViewPage />
             </ProtectedRoute>
           }
         />
         <Route
-          path="/calendar/view"
+          path="/calendar/list"
           element={
             <ProtectedRoute>
-              <CalendarViewPage />
+              <CalendarPage />
             </ProtectedRoute>
           }
         />

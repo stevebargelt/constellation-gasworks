@@ -46,13 +46,10 @@ export function useCalendarOverlay(
 
     if (!ownerIds.length) return;
 
-    // One channel per overlay owner, named shared:{uid} per architecture.
-    // Each channel multiplexes over the single Supabase Realtime connection
-    // (free tier: 500 concurrent connections — client uses one with N channels).
-    // RLS on visible_calendar_events controls which rows are returned on reconcile.
+    const id = Math.random().toString(36).slice(2);
     const channels = ownerIds.map((uid) =>
       supabase
-        .channel(`shared:${uid}`)
+        .channel(`cal-overlay:${uid}:${id}`)
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "calendar_events" },

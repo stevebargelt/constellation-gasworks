@@ -39,20 +39,16 @@ export function useTaskLists(): TaskListsState {
     load();
 
     let sharedChannel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+    const id = Math.random().toString(36).slice(2);
 
-    // Resolve the current user's uid to build the shared:{uid} channel name
-    // per the architecture channel convention.
-    // RLS on task_lists / task_list_members ensures only rows visible to
-    // auth.uid() are returned on each reconcile fetch.
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
+      if (!user || cancelled) return;
       uidRef.current = user.id;
       const uid = user.id;
 
-      // shared:{uid} — task lists the user owns or is a member of,
-      // and the membership table that controls access.
       sharedChannel = supabase
-        .channel(`shared:${uid}`)
+        .channel(`tasklists:${uid}:${id}`)
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "task_lists" },
@@ -98,6 +94,7 @@ export function useTaskLists(): TaskListsState {
     });
 
     return () => {
+      cancelled = true;
       if (sharedChannel) supabase.removeChannel(sharedChannel);
     };
   }, [load]);

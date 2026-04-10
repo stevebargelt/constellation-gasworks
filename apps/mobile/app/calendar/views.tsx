@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  FlatList,
   StyleSheet,
   ActivityIndicator,
   Dimensions,
@@ -245,15 +244,13 @@ function DayEventList({ day, events, getColor, onEventPress }: DayEventListProps
   }
 
   return (
-    <FlatList
-      data={dayEvents}
-      keyExtractor={(e) => e.id}
-      contentContainerStyle={dayStyles.list}
-      renderItem={({ item: ev }) => {
+    <View style={dayStyles.list}>
+      {dayEvents.map((ev) => {
         const color = getColor(ev.creator_id);
         const isBusy = ev.viewer_permission === "free_busy";
         return (
           <TouchableOpacity
+            key={ev.id}
             style={dayStyles.card}
             onPress={() => onEventPress(ev)}
             activeOpacity={0.7}
@@ -279,8 +276,8 @@ function DayEventList({ day, events, getColor, onEventPress }: DayEventListProps
             </View>
           </TouchableOpacity>
         );
-      }}
-    />
+      })}
+    </View>
   );
 }
 

@@ -94,15 +94,42 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<sb_publishable_xxx>
 
 ## Deploying
 
-```bash
-# Push migrations to production (remote Supabase project)
-supabase db push
+### Database migrations
 
-# Web deploys automatically via GitHub Actions on merge to main
-# Mobile builds via EAS Build on merge to main
+```bash
+# Apply migrations to local instance
+supabase db reset
+
+# Apply migrations to production
+supabase db push
 ```
 
-> **Local vs production**: `supabase db reset` applies migrations to your local instance. `supabase db push` applies them to the remote production project.
+### Web — Vercel
+
+The web app (`apps/web`) deploys automatically to Vercel on every push to `main`.
+
+**Initial Vercel setup:**
+
+1. Import the repo in Vercel. Set the **Root Directory** to `apps/web` and the **Framework Preset** to `Vite`.
+2. Under **Settings → Environment Variables**, add the following for the `Production` environment:
+
+   | Variable | Value |
+   |---|---|
+   | `VITE_SUPABASE_URL` | Your Supabase project URL (e.g. `https://xxxx.supabase.co`) |
+   | `VITE_SUPABASE_PUBLISHABLE_KEY` | Your publishable key (`sb_publishable_xxx` from the Supabase dashboard) |
+
+3. Trigger a redeploy after setting the variables.
+
+**Build settings** (Vercel auto-detects these from `apps/web`, but verify):
+- Build command: `vite build`
+- Output directory: `dist`
+- Install command: `pnpm install`
+
+> The web app reads `VITE_*` vars at build time via Vite's env injection. Variables added after the initial deploy require a manual redeploy to take effect.
+
+### Mobile — EAS Build
+
+Mobile builds are handled by Expo Application Services (EAS). See `apps/mobile/eas.json` for build profile configuration.
 
 ## Architecture
 

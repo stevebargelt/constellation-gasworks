@@ -76,18 +76,16 @@ export function useCalendar(range?: { start: string; end: string }): CalendarSta
 
     let sharedChannel: ReturnType<typeof supabase.channel> | null = null;
     let userChannel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+    const id = Math.random().toString(36).slice(2);
 
-    // Resolve the current user's uid to build user-specific channel names.
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
+      if (!user || cancelled) return;
       uidRef.current = user.id;
       const uid = user.id;
 
-      // shared:{uid} — calendar_events the user owns or participates in.
-      // RLS on visible_calendar_events ensures only permitted rows are returned
-      // on each reconcile fetch. We apply optimistic state here then reconcile.
       sharedChannel = supabase
-        .channel(`shared:${uid}`)
+        .channel(`cal-events:${uid}:${id}`)
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "calendar_events" },
@@ -125,9 +123,8 @@ export function useCalendar(range?: { start: string; end: string }): CalendarSta
         )
         .subscribe();
 
-      // user:{uid} — event_attendees for incoming invites and RSVP updates.
       userChannel = supabase
-        .channel(`user:${uid}`)
+        .channel(`cal-attendees:${uid}:${id}`)
         .on(
           "postgres_changes",
           {
@@ -146,6 +143,7 @@ export function useCalendar(range?: { start: string; end: string }): CalendarSta
     });
 
     return () => {
+      cancelled = true;
       if (sharedChannel) supabase.removeChannel(sharedChannel);
       if (userChannel) supabase.removeChannel(userChannel);
     };

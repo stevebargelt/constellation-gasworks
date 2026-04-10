@@ -32,19 +32,16 @@ export function useTasks(taskListId: string): TasksState {
 
     let sharedChannel: ReturnType<typeof supabase.channel> | null = null;
     let userChannel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+    const id = Math.random().toString(36).slice(2);
 
-    // Resolve the current user's uid to build user-specific channel names
-    // per the architecture channel convention (user:{uid} / shared:{uid}).
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
+      if (!user || cancelled) return;
       uidRef.current = user.id;
       const uid = user.id;
 
-      // shared:{uid} — tasks in this specific task list.
-      // Filter to task_list_id so only relevant changes trigger reconcile.
-      // Optimistic update applied from payload; load() reconciles server state.
       sharedChannel = supabase
-        .channel(`shared:${uid}`)
+        .channel(`tasks:${uid}:${id}`)
         .on(
           "postgres_changes",
           {
@@ -94,11 +91,8 @@ export function useTasks(taskListId: string): TasksState {
         )
         .subscribe();
 
-      // user:{uid} — tasks assigned to the current user across all lists.
-      // Catches assignee changes (task assigned to / unassigned from me)
-      // that may affect visibility in this list view; triggers reconcile.
       userChannel = supabase
-        .channel(`user:${uid}`)
+        .channel(`tasks-assignee:${uid}:${id}`)
         .on(
           "postgres_changes",
           {
@@ -115,6 +109,7 @@ export function useTasks(taskListId: string): TasksState {
     });
 
     return () => {
+      cancelled = true;
       if (sharedChannel) supabase.removeChannel(sharedChannel);
       if (userChannel) supabase.removeChannel(userChannel);
     };
