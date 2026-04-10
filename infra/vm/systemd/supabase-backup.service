@@ -1,0 +1,24 @@
+[Unit]
+Description=Supabase Daily Backup — pg_dump all projects to Azure Blob Storage
+Documentation=https://github.com/stevebargelt/constellation-gasworks/blob/main/infra/vm/scripts/backup.sh
+# Run after network and Docker are up so pg_dump can reach Postgres containers
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Path includes Docker and Azure CLI binaries
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EnvironmentFile=-/etc/supabase-backup.conf
+ExecStart=/opt/supabase-scripts/backup.sh
+# Allow up to 2 hours for large databases before timing out
+TimeoutStartSec=7200
+# Run as root so it can read per-project .env files in /opt/supabase-*/
+# (tighten with a dedicated backup user if security posture requires it)
+User=root
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=supabase-backup
+
+[Install]
+WantedBy=multi-user.target
