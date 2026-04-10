@@ -1,0 +1,16 @@
+# Local tfvars — contain secrets, never commit
+terraform.tfvars
+*.tfvars
+!*.tfvars.example
+
+# OpenTofu/Terraform state and cache
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

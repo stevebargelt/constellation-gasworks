@@ -1,0 +1,14 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# Never commit terraform.tfvars — it is gitignored.
+
+project_name      = "constellation"
+environment       = "prod"
+location          = "eastus2"
+vm_size           = "Standard_B2ms"
+vm_admin_username = "azureuser"
+
+# Generate with: cat ~/.ssh/id_rsa.pub (or your preferred key)
+vm_ssh_public_key = "ssh-rsa AAAA..."
+
+data_disk_size_gb = 64
+dns_zone_name     = "db.harebrained-apps.com"
