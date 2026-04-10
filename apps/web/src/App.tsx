@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Link, Routes, Route, Navigate } from "react-router-dom";
+import posthog from "posthog-js";
 import { useAuth } from "@constellation/hooks";
 import { supabase } from "@constellation/api";
 import LoginPage from "./pages/auth/LoginPage";
@@ -81,6 +82,14 @@ function HomePage() {
 }
 
 export default function App() {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user && import.meta.env.VITE_POSTHOG_KEY) {
+      posthog.identify(user.id, { email: user.email });
+    }
+  }, [user]);
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <Routes>
