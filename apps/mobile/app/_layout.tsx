@@ -5,6 +5,8 @@ import { StatusBar } from "expo-status-bar";
 import { initSupabase } from "@constellation/api";
 import { useAuth } from "@constellation/hooks";
 import { secureStoreAdapter } from "../src/supabaseStorage";
+import NewRelic from "newrelic-react-native-agent";
+import { PostHogProvider, usePostHog } from "posthog-react-native";
 
 initSupabase(
   process.env.EXPO_PUBLIC_SUPABASE_URL!,
@@ -12,10 +14,21 @@ initSupabase(
   { auth: { storage: secureStoreAdapter, autoRefreshToken: true, persistSession: true } }
 );
 
+if (process.env.EXPO_PUBLIC_NEW_RELIC_APP_TOKEN) {
+  NewRelic.startAgent(process.env.EXPO_PUBLIC_NEW_RELIC_APP_TOKEN, {});
+}
+
 function AuthGuard() {
   const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const posthog = usePostHog();
+
+  useEffect(() => {
+    if (user && posthog) {
+      posthog.identify(user.id, user.email ? { email: user.email } : {});
+    }
+  }, [user, posthog]);
 
   useEffect(() => {
     if (loading) return;
@@ -33,15 +46,21 @@ function AuthGuard() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="light" />
-      <AuthGuard />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: "#030712" },
-          headerTintColor: "#f9fafb",
-          contentStyle: { backgroundColor: "#030712" },
-        }}
-      />
+      <PostHogProvider
+        apiKey={process.env.EXPO_PUBLIC_POSTHOG_KEY ?? ""}
+        options={{ host: "https://app.posthog.com" }}
+        autocapture
+      >
+        <StatusBar style="light" />
+        <AuthGuard />
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: "#030712" },
+            headerTintColor: "#f9fafb",
+            contentStyle: { backgroundColor: "#030712" },
+          }}
+        />
+      </PostHogProvider>
     </GestureHandlerRootView>
   );
 }
