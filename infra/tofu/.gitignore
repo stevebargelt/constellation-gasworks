@@ -1,0 +1,22 @@
+# Local variable overrides — never commit real values
+terraform.tfvars
+*.tfvars
+!*.tfvars.example
+
+# OpenTofu working directories
+.terraform/
+.terraform.lock.hcl
+
+# State files (should live in remote backend only)
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
