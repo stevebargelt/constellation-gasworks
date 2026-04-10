@@ -7,143 +7,136 @@
 
 ---
 
+## What This Is (and Is Not)
+
+> **This is NOT a migration to Azure services.** No Azure AD, no Azure SignalR, no Azure Functions, no PostgREST replacement. The Supabase SDK, auth, realtime, RLS, and storage all stay exactly as they are today.
+>
+> **This IS running the open-source Supabase stack on an Azure VM** we already have credits for, instead of paying Supabase Cloud per-project fees. Azure provides the box. Supabase runs inside it.
+
+---
+
 ## Problem
 
-Supabase Cloud's free tier is a liability for active projects — 7-day inactivity pause, 500 MB limit, no backups. Upgrading to Pro solves those problems but costs $25/month per organization plus ~$10/month per project in compute. Prototyping 5–10 ideas simultaneously on Supabase Cloud quickly approaches $100+/month.
+Supabase Cloud's free tier pauses projects after 7 days of inactivity, caps storage at 500 MB, and provides no backups. Upgrading to Pro costs $25/month for the organization plus ~$10/month per project in compute. Prototyping 5–10 ideas simultaneously quickly approaches $100+/month — before any of them generate revenue.
 
 ---
 
 ## Proposed Solution
 
-Run **self-hosted Supabase on a single Azure VM**, funded by the existing $150/month Azure credit budget. This gives unlimited projects at a fixed infrastructure cost, while keeping the exact same Supabase APIs, SDK, RLS patterns, and realtime that Constellation already uses. No code changes. No new vendors. No new mental model.
+Run **self-hosted Supabase on a single Azure VM**, funded entirely by the existing $150/month Azure credit budget.
 
-Constellation production moves to the self-hosted instance alongside all future prototypes.
+Supabase is fully open source. The same stack that runs at supabase.com — PostgreSQL, GoTrue (auth), PostgREST, Realtime, Storage, Studio — runs on any Linux VM via Docker Compose. The `@supabase/supabase-js` SDK is endpoint-agnostic: change the URL from `*.supabase.co` to the VM's address and everything works identically. No code changes. No new vendors. No new SDKs.
 
 ---
 
-## Why This Works
+## What Stays the Same
 
-Supabase is fully open source. The same stack that runs at supabase.com — PostgreSQL, GoTrue (auth), PostgREST, Realtime, Storage, Studio — runs on any Linux VM via Docker Compose. The `@supabase/supabase-js` SDK is endpoint-agnostic: point it at your VM's URL instead of `*.supabase.co` and everything works identically.
+Everything application-facing is unchanged:
 
-**What stays exactly the same:**
 - `@supabase/supabase-js` SDK (web + mobile)
-- RLS policies and `get_permission()` function
-- Supabase Realtime subscriptions
-- Supabase Auth (email/password, Google OAuth, Apple OAuth)
+- Supabase Auth — email/password, Google OAuth, Apple OAuth
+- Supabase Realtime — all existing channel subscriptions work as-is
 - Supabase Storage
+- RLS policies and `get_permission()` function
 - `supabase/migrations/` workflow
 - Supabase Studio dashboard (self-hosted)
 
-**What changes:**
-- You own the ops: backups, upgrades, uptime
-- Secrets managed via Azure Key Vault instead of Supabase dashboard
+**Constellation requires zero code changes to migrate.** Update the URL and keys in `.env.local` and Vercel, run `supabase db push` against the new instance, done.
+
+---
+
+## What Changes
+
+- **Ops ownership** — backups, Supabase version upgrades, and uptime are self-managed
+- **URL** — `*.supabase.co` → your VM's subdomain
+
+That's it.
 
 ---
 
 ## Architecture
 
-One Azure VM running the full Supabase Docker Compose stack. Multiple projects run as separate Supabase deployments on the same host, each on its own port, fronted by a reverse proxy (Caddy or nginx) that routes by subdomain.
+One Azure VM running multiple independent Supabase deployments via Docker Compose, fronted by Caddy for HTTPS and subdomain routing.
 
 ```
-Azure VM (B2ms or B4ms)
-├── caddy (reverse proxy + automatic HTTPS)
-├── supabase-constellation/   ← production project
+Azure VM (the only Azure service doing real work)
+├── caddy (reverse proxy + automatic HTTPS via Let's Encrypt)
+├── supabase-constellation/     ← Constellation production
 │   ├── postgres
-│   ├── gotrue (auth)
-│   ├── postgrest
-│   ├── realtime
+│   ├── gotrue (auth)           ← same as Supabase Cloud auth
+│   ├── postgrest               ← same as Supabase Cloud API
+│   ├── realtime                ← same as Supabase Cloud realtime
 │   └── storage
-├── supabase-project-b/       ← prototype
-├── supabase-project-c/       ← prototype
+├── supabase-idea-b/            ← prototype
+├── supabase-idea-c/            ← prototype
 └── ...
 ```
 
-Each project gets its own subdomain (e.g., `constellation.db.yourdomain.com`) and isolated Postgres database. Projects are independent — one prototype crashing doesn't affect others.
+Each project gets its own subdomain and isolated Postgres database. Projects are fully independent — one crashing doesn't affect others.
 
 ---
 
 ## Cost
 
-All costs drawn from the existing $150/month Azure credit budget.
+All costs come from the existing $150/month Azure credit budget. Out-of-pocket cost: **$0**.
 
-| Resource | Size | Est. Monthly Cost |
+| Resource | Purpose | Est. Monthly |
 |---|---|---|
-| Azure VM (B2ms: 2 vCPU, 8 GB RAM) | Suitable for 3–5 active projects | ~$35 |
-| Azure VM (B4ms: 4 vCPU, 16 GB RAM) | Suitable for 7–10 active projects | ~$70 |
-| Azure Blob Storage (Supabase Storage backend) | 50 GB | ~$1–2 |
-| Azure Managed Disk (OS + data) | 64 GB P10 SSD | ~$5 |
-| Static IP | 1 | ~$3 |
-| **Total (B2ms)** | | **~$44/month** |
-| **Total (B4ms)** | | **~$80/month** |
+| Azure VM — B2ms (2 vCPU, 8 GB RAM) | Runs 3–5 Supabase projects | ~$35 |
+| Azure VM — B4ms (4 vCPU, 16 GB RAM) | Runs 7–10 Supabase projects | ~$70 |
+| Managed Disk (64 GB SSD) | VM OS + Postgres data | ~$5 |
+| Static IP | Fixed address for DNS | ~$3 |
+| Blob Storage | Backup storage only (pg_dump archives) | ~$1–2 |
+| **Total (B2ms option)** | | **~$44/month** |
+| **Total (B4ms option)** | | **~$80/month** |
 
-**Out-of-pocket cost: $0.** Both options are within the $150/month credit budget, with meaningful headroom.
-
-Supabase Cloud Pro subscription: cancelled. Zero ongoing SaaS cost for Supabase.
+Supabase Cloud subscription: **cancelled**. $0 ongoing SaaS fees.
 
 ---
 
 ## Tradeoffs
 
 ### Gains
-- **Unlimited projects** at fixed infrastructure cost — 5, 10, 20 prototypes, same price
-- **No project pausing** — VM runs continuously
-- **Same SDK and patterns** — zero code changes to Constellation or future projects
-- **Full Postgres** — all extensions, no limitations
-- **Real backups** — pg_dump cron + Azure Blob Storage; retain as long as needed
-- **Studio dashboard** — self-hosted Supabase Studio available for all projects
-- **No per-project billing** — spin up and tear down prototypes freely
+- Unlimited projects at fixed cost — 5, 10, 20 prototypes, same monthly bill
+- No project pausing — VM runs continuously
+- Zero code changes — same SDK, same patterns everywhere
+- Full Postgres with all extensions
+- Automated backups with configurable retention
+- Free to spin up and tear down prototypes
 
 ### Costs
-- **Ops ownership** — you manage upgrades, backups, and uptime; no Supabase support SLA
-- **Supabase upgrade management** — new Supabase releases require manual `docker compose pull && up`
-- **SSL/DNS setup** — one-time: domain, Caddy config, wildcard or per-project subdomains
-- **Single point of failure** — one VM means one failure domain (mitigated by Azure VM SLA ~99.9%)
+- Self-managed ops — Supabase version upgrades are manual (`docker compose pull && up`)
+- No Supabase support SLA
+- Single VM = single failure domain (Azure VM SLA is ~99.9%; acceptable for prototypes and early-stage production)
+- One-time DNS/SSL setup (Caddy handles SSL automatically; DNS is a few records)
 
 ---
 
 ## Key Setup Areas
 
-1. **OpenTofu infrastructure** — Azure VM, Managed Disk, Blob Storage account (for Supabase Storage backend and backups), Static IP, Key Vault, DNS zone — all as OpenTofu modules. `tofu apply` provisions everything from scratch.
-
-2. **Supabase Docker Compose** — Official Supabase self-hosting Docker Compose config, parameterized per project. New project = copy config, set new port range and database name, `docker compose up`.
-
-3. **Reverse proxy (Caddy)** — Caddy handles automatic HTTPS (Let's Encrypt) and subdomain routing to each project's PostgREST/Auth/Studio ports. Minimal config.
-
-4. **Backup strategy** — Daily `pg_dump` cron per project, compressed and uploaded to Azure Blob Storage. Retention policy set in Blob Storage lifecycle rules.
-
-5. **Secrets management** — Azure Key Vault stores Supabase JWT secrets, DB passwords, OAuth credentials. OpenTofu provisions Key Vault and injects secrets at VM boot via cloud-init or Key Vault references.
-
-6. **Constellation migration** — Update `.env.local` (local dev) and Vercel environment variables to point at the self-hosted URL. Run `supabase db push` against the new instance. No code changes.
-
-7. **Monitoring** — Azure Monitor + VM metrics for CPU/disk/memory. Optional: Uptime Robot (free) for endpoint health checks.
+1. **VM provisioning (OpenTofu)** — Azure VM, managed disk, static IP, DNS zone. One `tofu apply` from scratch. No manual portal steps.
+2. **Supabase Docker Compose** — Official self-hosting config, one instance per project. New prototype = copy config, new port range, `docker compose up`.
+3. **Reverse proxy** — Caddy routes `constellation.db.yourdomain.com` → Constellation's Supabase instance, `project-b.db.yourdomain.com` → next instance, etc. Automatic HTTPS.
+4. **Backups** — Daily `pg_dump` per project, uploaded to Azure Blob Storage. Lifecycle rules control retention.
+5. **Constellation cutover** — Update URL + keys in Vercel env vars and `.env.local`. No code changes.
 
 ---
 
-## Constraints
+## Open Questions for PM
 
-- **All infrastructure via OpenTofu** — no manual Azure portal provisioning
-- **Supabase self-hosted** — same open-source stack as Supabase Cloud; no forks or replacements
-- **Backups required** — automated daily pg_dump to Blob Storage before Constellation migrates
-- **HTTPS required** — Caddy handles this automatically via Let's Encrypt
-- **All secrets via Azure Key Vault** — no hardcoded credentials
-
----
-
-## Open Questions for PM/Architect
-
-1. **VM size**: B2ms (~$35/month, 3–5 projects) or B4ms (~$70/month, 7–10 projects)? Depends on how aggressively prototyping ramps up. Can resize with downtime.
-2. **Domain strategy**: One domain with subdomains per project (e.g., `*.db.yourdomain.com`) or per-project domains? Subdomains on one domain is simpler.
-3. **Constellation cutover**: Migrate Constellation to self-hosted before or after the infrastructure is validated with a throwaway prototype? Recommended: validate with a prototype first, then migrate Constellation.
-4. **Supabase upgrade policy**: How often to pull Supabase updates? Recommended: monthly maintenance window.
+1. **VM size**: B2ms (3–5 projects, ~$44/month) or B4ms (7–10 projects, ~$80/month)?
+2. **Cutover sequence**: Validate on a throwaway prototype first, then migrate Constellation — or migrate Constellation directly? (Throwaway-first is lower risk.)
+3. **Staging environment**: Should a Constellation staging instance also live on this VM, or is local Supabase CLI sufficient for pre-production testing?
+4. **Backup retention**: How many days of pg_dump backups to keep per project?
 
 ---
 
 ## Recommendation
 
-Approve. This is the lowest-risk path to unlimited prototyping at fixed cost. No new vendors, no new SDKs, no code changes to Constellation or future projects. The only new responsibility is server maintenance — manageable with a monthly upgrade cadence and automated backups.
+Approve. Lowest-risk path to unlimited prototyping at fixed cost within existing Azure credits. No new SDKs, no migration of application code, no new vendors. The only new work is infrastructure setup and a monthly Supabase upgrade cadence.
 
 Route to:
-1. **PM** → PRD covering migration plan (Constellation cutover), backup policy, environment strategy (does "staging" live on this server too?)
-2. **Architect** → Architecture doc covering Docker Compose layout, Caddy config, OpenTofu module structure, backup automation, Constellation cutover sequence
-3. **Orchestrator** → Break into beads: IaC, Supabase deploy, reverse proxy, backup automation, Constellation migration
+1. **PM** → PRD: cutover plan, backup policy, environment strategy, VM sizing decision
+2. **Architect** → Architecture doc: Docker Compose layout, Caddy config, OpenTofu modules, backup automation, Constellation cutover sequence
+3. **Orchestrator** → Implementation beads: IaC, Supabase deploy, reverse proxy, backups, Constellation migration
 4. **Polecats** → Execute
