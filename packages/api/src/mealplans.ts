@@ -89,31 +89,6 @@ export async function deleteMealPlan(id: string): Promise<void> {
   await supabase.from("meal_plans").delete().eq("id", id);
 }
 
-export async function deleteMealPlanDay(
-  mealPlanId: string,
-  dayOfWeek: number,
-  mealType: string
-): Promise<void> {
-  await supabase
-    .from("meal_plan_days")
-    .delete()
-    .eq("meal_plan_id", mealPlanId)
-    .eq("day_of_week", dayOfWeek)
-    .eq("meal_type", mealType);
-}
-
-export async function addMealPlanMember(
-  mealPlanId: string,
-  userId: string
-): Promise<MealPlanMember | null> {
-  const { data } = await supabase
-    .from("meal_plan_members")
-    .insert({ meal_plan_id: mealPlanId, user_id: userId })
-    .select()
-    .single();
-  return data;
-}
-
 export async function upsertShoppingListItems(
   items: Omit<ShoppingListItem, "id" | "is_checked" | "checked_by_id" | "updated_at">[]
 ): Promise<void> {
@@ -131,4 +106,40 @@ export async function getMealPlanMembers(
     .select("*")
     .eq("meal_plan_id", mealPlanId);
   return data ?? [];
+}
+
+export async function addMealPlanMember(
+  mealPlanId: string,
+  userId: string
+): Promise<MealPlanMember | null> {
+  const { data } = await supabase
+    .from("meal_plan_members")
+    .insert({ meal_plan_id: mealPlanId, user_id: userId })
+    .select()
+    .single();
+  return data;
+}
+
+export async function removeMealPlanMember(
+  mealPlanId: string,
+  userId: string
+): Promise<void> {
+  await supabase
+    .from("meal_plan_members")
+    .delete()
+    .eq("meal_plan_id", mealPlanId)
+    .eq("user_id", userId);
+}
+
+export async function deleteMealPlanDay(
+  mealPlanId: string,
+  dayOfWeek: number,
+  mealType: string
+): Promise<void> {
+  await supabase
+    .from("meal_plan_days")
+    .delete()
+    .eq("meal_plan_id", mealPlanId)
+    .eq("day_of_week", dayOfWeek)
+    .eq("meal_type", mealType);
 }

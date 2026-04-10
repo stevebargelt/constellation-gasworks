@@ -1,92 +1,97 @@
-import { useEffect, useState } from "react";
-import type { MealPlan } from "@constellation/types";
+import { useCallback, useEffect, useState } from "react";
+import type { MealPlan, MealPlanDay, MealPlanMember } from "@constellation/types";
 import {
-  getMealPlans,
-  createMealPlan as apiCreateMealPlan,
-  updateMealPlan as apiUpdateMealPlan,
-  deleteMealPlan as apiDeleteMealPlan,
+  getMealPlan,
+  getMealPlanDays,
+  getMealPlanMembers,
   upsertMealPlanDay,
   deleteMealPlanDay,
+  deleteMealPlan,
   addMealPlanMember,
-  getRecipeIngredients,
-  upsertShoppingListItems,
+  removeMealPlanMember,
 } from "@constellation/api";
-import { aggregateIngredients } from "@constellation/utils";
 
 interface MealPlanState {
-  mealPlans: MealPlan[];
+  plan: MealPlan | null;
+  days: MealPlanDay[];
+  members: MealPlanMember[];
   loading: boolean;
   error: Error | null;
-  createMealPlan: (plan: Omit<MealPlan, "id" | "creator_id" | "updated_at">) => Promise<void>;
-  updateMealPlan: (id: string, updates: Partial<Omit<MealPlan, "id" | "creator_id" | "updated_at">>) => Promise<void>;
-  deleteMealPlan: (id: string) => Promise<void>;
-  setDaySlot: (mealPlanId: string, dayOfWeek: number, mealType: string, recipeId: string | null, freeText: string | null) => Promise<void>;
-  clearDaySlot: (mealPlanId: string, dayOfWeek: number, mealType: string) => Promise<void>;
-  addMember: (mealPlanId: string, userId: string) => Promise<void>;
-  generateShoppingList: (mealPlanId: string, recipeIds: string[]) => Promise<void>;
+  upsertDay: (day: Omit<MealPlanDay, "id">) => Promise<void>;
+  clearDay: (dayOfWeek: number, mealType: string) => Promise<void>;
+  deletePlan: () => Promise<void>;
+  addMember: (userId: string) => Promise<void>;
+  removeMember: (userId: string) => Promise<void>;
 }
 
-export function useMealPlan(): MealPlanState {
-  const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
+export function useMealPlan(mealPlanId: string): MealPlanState {
+  const [plan, setPlan] = useState<MealPlan | null>(null);
+  const [days, setDays] = useState<MealPlanDay[]>([]);
+  const [members, setMembers] = useState<MealPlanMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
-    getMealPlans()
-      .then(setMealPlans)
+    Promise.all([getMealPlan(mealPlanId), getMealPlanDays(mealPlanId), getMealPlanMembers(mealPlanId)])
+      .then(([planData, daysData, membersData]) => {
+        setPlan(planData);
+        setDays(daysData);
+        setMembers(membersData);
+      })
       .catch((e) => setError(e instanceof Error ? e : new Error(String(e))))
       .finally(() => setLoading(false));
+  }, [mealPlanId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const upsertDay = async (day: Omit<MealPlanDay, "id">) => {
+    const updated = await upsertMealPlanDay(day);
+    if (updated) {
+      setDays((prev) => {
+        const idx = prev.findIndex(
+          (d) =>
+            d.meal_plan_id === day.meal_plan_id &&
+            d.day_of_week === day.day_of_week &&
+            d.meal_type === day.meal_type
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = updated;
+          return next;
+        }
+        return [...prev, updated];
+      });
+    }
   };
 
-  useEffect(() => { load(); }, []);
-
-  const createMealPlan = async (plan: Omit<MealPlan, "id" | "creator_id" | "updated_at">) => {
-    await apiCreateMealPlan(plan);
-    load();
-  };
-
-  const updateMealPlan = async (id: string, updates: Partial<Omit<MealPlan, "id" | "creator_id" | "updated_at">>) => {
-    await apiUpdateMealPlan(id, updates);
-    load();
-  };
-
-  const deleteMealPlan = async (id: string) => {
-    await apiDeleteMealPlan(id);
-    load();
-  };
-
-  const setDaySlot = async (
-    mealPlanId: string,
-    dayOfWeek: number,
-    mealType: string,
-    recipeId: string | null,
-    freeText: string | null
-  ) => {
-    await upsertMealPlanDay({ meal_plan_id: mealPlanId, day_of_week: dayOfWeek, meal_type: mealType, recipe_id: recipeId, free_text: freeText });
-  };
-
-  const clearDaySlot = async (mealPlanId: string, dayOfWeek: number, mealType: string) => {
+  const clearDay = async (dayOfWeek: number, mealType: string) => {
     await deleteMealPlanDay(mealPlanId, dayOfWeek, mealType);
-  };
-
-  const addMember = async (mealPlanId: string, userId: string) => {
-    await addMealPlanMember(mealPlanId, userId);
-  };
-
-  const generateShoppingList = async (mealPlanId: string, recipeIds: string[]) => {
-    const ingredientLists = await Promise.all(recipeIds.map(getRecipeIngredients));
-    const allIngredients = ingredientLists.flat();
-    const aggregated = aggregateIngredients(allIngredients);
-    await upsertShoppingListItems(
-      aggregated.map((item) => ({
-        meal_plan_id: mealPlanId,
-        ingredient_name: item.name,
-        quantity: item.quantity || null,
-        unit: item.unit,
-      }))
+    setDays((prev) =>
+      prev.filter(
+        (d) => !(d.day_of_week === dayOfWeek && d.meal_type === mealType)
+      )
     );
   };
 
-  return { mealPlans, loading, error, createMealPlan, updateMealPlan, deleteMealPlan, setDaySlot, clearDaySlot, addMember, generateShoppingList };
+  const deletePlan = async () => {
+    await deleteMealPlan(mealPlanId);
+  };
+
+  const addMember = async (userId: string) => {
+    await addMealPlanMember(mealPlanId, userId);
+    setMembers((prev) => {
+      if (prev.some((m) => m.user_id === userId)) return prev;
+      // Optimistic add — reload will fill in server-assigned id
+      return [...prev, { id: "", meal_plan_id: mealPlanId, user_id: userId, created_at: "" }];
+    });
+    load();
+  };
+
+  const removeMember = async (userId: string) => {
+    await removeMealPlanMember(mealPlanId, userId);
+    setMembers((prev) => prev.filter((m) => m.user_id !== userId));
+  };
+
+  return { plan, days, members, loading, error, upsertDay, clearDay, deletePlan, addMember, removeMember };
 }
