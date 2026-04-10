@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily trigger for Supabase backup (02:00 UTC)
+Documentation=https://github.com/stevebargelt/constellation-gasworks/blob/main/infra/vm/systemd/supabase-backup.service
+
+[Timer]
+# Fire daily at 02:00 UTC — low-traffic window for all likely timezones
+OnCalendar=*-*-* 02:00:00 UTC
+# If the VM was offline when the timer should have fired, run once on next boot
+Persistent=true
+# Spread start over a 5-minute random window to avoid thundering-herd if multiple VMs run timers
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
