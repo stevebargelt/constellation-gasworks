@@ -17,3 +17,9 @@ vm_admin_username       = "azureuser"
 #   base64 -w0 infra/vm/cloud-init.yaml
 # Leave null to provision the VM without cloud-init (manual setup required)
 # vm_custom_data = null
+
+# Storage — backups account (tfstate account is pre-bootstrapped, name set above)
+backups_storage_account_name = "stconstellationbackups"
+
+# VM managed identity principal ID — set to the output from the identity/VM resources
+# vm_managed_identity_principal_id = "<principal-id-from-tofu-output>"
