@@ -7,6 +7,7 @@
 #   2. Studio block — routes studio.<project>.db.harebrained-apps.com to Studio (port 3N00)
 #
 # TLS is handled automatically via Let's Encrypt ACME — no manual cert management.
+# HTTP → HTTPS redirect is automatic for all named sites (Caddy default behavior).
 # The VM's static IP must be pointed to by a wildcard A record:
 #   *.db.harebrained-apps.com → <VM static IP>
 #
