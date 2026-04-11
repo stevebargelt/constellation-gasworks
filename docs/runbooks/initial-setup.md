@@ -85,6 +85,13 @@ The workflow authenticates to Azure via OIDC — no stored credentials in GitHub
    - Repository: `constellation-gasworks`
    - Entity: **Pull request**
    - Name: `constellation-github-actions-pr`
+
+   **Credential 3 — for tofu apply (runs in the `production` environment):**
+   - Scenario: GitHub Actions
+   - Organization: your GitHub username or org
+   - Repository: `constellation-gasworks`
+   - Entity: **Environment** → `production`
+   - Name: `constellation-github-actions-production`
 3. Note the **Client ID** and **Tenant ID** — both are on the app registration's **Overview** page (navigate back to it after adding the credential). Find your **Subscription ID** separately by searching "Subscriptions" in the Azure portal top search bar.
 4. In the Azure portal, search "Subscriptions" → click your subscription → left sidebar: **Access control (IAM)** → Add → Add role assignment → Privileged Administrator Roles
   2. Role: **Contributor** (the built-in role: "Grants full access to manage all resources, but does not allow you to assign roles in Azure RBAC"
@@ -113,10 +120,13 @@ Secrets (masked in logs):
 | `TF_VAR_CONSTELLATION_SERVICE_ROLE_KEY` | Service role JWT from Step 1 |
 | `TF_VAR_RESEND_API_KEY` | From resend.com Settings → API Keys |
 
-Optional (for EAS mobile preview builds in CI):
+Required for deploy workflow (Vercel + EAS):
 
 | Name | Value |
 |---|---|
+| `VERCEL_TOKEN` | vercel.com → Settings → Tokens |
+| `VERCEL_ORG_ID` | vercel.com → Settings → General → Team ID |
+| `VERCEL_PROJECT_ID` | Vercel project → Settings → General → Project ID |
 | `EXPO_TOKEN` | expo.dev → Account Settings → Access Tokens |
 
 > **Why these names?** The CI workflow passes these directly as `TF_VAR_*` environment variables to OpenTofu. `terraform.tfvars` and `secrets.tfvars` are gitignored and never present in CI — all variable values must come from this table or be hardcoded non-sensitive defaults in the workflow itself.
