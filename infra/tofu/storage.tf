@@ -32,7 +32,7 @@ resource "azurerm_storage_account" "backups" {
 # ── Backups container ──────────────────────────────────────────────────────────
 resource "azurerm_storage_container" "backups" {
   name                  = "backups"
-  storage_account_id    = azurerm_storage_account.backups.id
+  storage_account_name  = azurerm_storage_account.backups.name
   container_access_type = "private"
 }
 
