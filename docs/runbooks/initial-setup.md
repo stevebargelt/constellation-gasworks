@@ -95,10 +95,19 @@ The workflow authenticates to Azure via OIDC — no stored credentials in GitHub
    - Entity: **Environment** → `production`
    - Name: `constellation-github-actions-production`
 3. Note the **Client ID** and **Tenant ID** — both are on the app registration's **Overview** page (navigate back to it after adding the credential). Find your **Subscription ID** separately by searching "Subscriptions" in the Azure portal top search bar.
-4. In the Azure portal, search "Subscriptions" → click your subscription → left sidebar: **Access control (IAM)** → Add → Add role assignment → Privileged Administrator Roles
-  2. Role: **Contributor** (the built-in role: "Grants full access to manage all resources, but does not allow you to assign roles in Azure RBAC"
-  3. Members: member type **User, group, or service principal** → search for and select `constellation-github-actions`
-  4. Review and Assign
+4. In the Azure portal, search "Subscriptions" → click your subscription → left sidebar: **Access control (IAM)** → Add → Add role assignment → Privileged Administrator Roles. Assign **two** roles to `constellation-github-actions`:
+
+   **Role assignment 1 — Contributor** (provision/modify resources):
+   - Role: **Contributor**
+   - Members: member type **User, group, or service principal** → search for and select `constellation-github-actions`
+   - Review and Assign
+
+   **Role assignment 2 — User Access Administrator** (required for OpenTofu to create role assignments):
+   - Role: **User Access Administrator**
+   - Members: member type **User, group, or service principal** → search for and select `constellation-github-actions`
+   - Review and Assign
+
+   > **Why both?** Contributor alone cannot call `Microsoft.Authorization/roleAssignments/write`. OpenTofu creates role assignments to grant the VM's managed identity access to Key Vault and Blob Storage — so the service principal needs User Access Administrator as well.
 
 **In GitHub (repo → Settings → Secrets and variables → Actions):**
 

@@ -11,6 +11,9 @@ jobs:
   eas-build-production:
     name: EAS Build (production)
     runs-on: ubuntu-latest
+    # iOS credentials require interactive setup (eas build --platform ios locally).
+    # continue-on-error until that's done so deploys don't block.
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
