@@ -47,7 +47,7 @@ export default function RootLayout() {
   return (
     <PostHogProvider
       apiKey={process.env.EXPO_PUBLIC_POSTHOG_KEY ?? ""}
-      options={{ host: "https://app.posthog.com" }}
+      options={{ host: process.env.EXPO_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com" }}
       autocapture
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
