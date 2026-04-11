@@ -45,7 +45,7 @@ This must happen before `tofu apply` — OpenTofu stores its state in Blob Stora
 ```bash
 az login
 
-az group create --name constellation --location eastus
+az group create --name constellation --location westus3
 
 az storage account create \
   --name hbconstellationtfstate \
@@ -57,6 +57,8 @@ az storage container create \
   --name tfstate \
   --account-name hbconstellationtfstate
 ```
+
+> **Note:** The `constellation` resource group created here is imported into OpenTofu state automatically on first `tofu apply` via an `import` block in `main.tf`. You do not need to delete and recreate it.
 
 ---
 
