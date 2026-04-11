@@ -108,6 +108,10 @@ The workflow authenticates to Azure via OIDC — no stored credentials in GitHub
    - Review and Assign
 
    > **Why both?** Contributor alone cannot call `Microsoft.Authorization/roleAssignments/write`. OpenTofu creates role assignments to grant the VM's managed identity access to Key Vault and Blob Storage — so the service principal needs User Access Administrator as well.
+   >
+   > **Constrained delegation prompt**: When assigning User Access Administrator, Azure asks how to constrain delegation. Select **"Allow user to assign all roles except privileged administrator roles Owner, UAA, RBAC (Recommended)"** — OpenTofu only assigns standard data-plane roles (`Key Vault Secrets User`, `Storage Blob Data Contributor`), so the recommended option is sufficient.
+   >
+   > **Key Vault secrets**: OpenTofu also writes secrets directly to Key Vault during `tofu apply`. This requires the CI service principal to have `Key Vault Secrets Officer` on the vault itself — handled automatically by a role assignment in `keyvault.tf` using `data.azurerm_client_config.current.object_id`.
 
 **In GitHub (repo → Settings → Secrets and variables → Actions):**
 
