@@ -90,6 +90,7 @@ The workflow authenticates to Azure via OIDC — no stored credentials in GitHub
 | Variable | `AZURE_CLIENT_ID` | App registration Client ID |
 | Variable | `AZURE_TENANT_ID` | Your Azure Tenant ID |
 | Variable | `AZURE_SUBSCRIPTION_ID` | Your Azure Subscription ID |
+| Variable | `TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME` | Globally unique name for backup storage (e.g. `hbconstellationbackups`) |
 | Secret | `TF_VAR_VM_SSH_PUBLIC_KEY` | `cat ~/.ssh/id_ed25519.pub` |
 
 Also create a GitHub Actions **environment** named `production` (Settings → Environments) — the apply job requires it.
@@ -112,7 +113,7 @@ location                     = "westus3"
 dns_zone_name                = "db.harebrained-apps.com"
 tfstate_storage_account      = "hbconstellationtfstate"
 vm_admin_username            = "azureuser"
-backups_storage_account_name = "<choose a globally unique name, e.g. hbconstellationbackups>"
+# backups_storage_account_name is set via GitHub Actions variable TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME — not needed here
 ```
 
 Fill in `secrets.tfvars` with values from Step 1 + your Resend API key:
