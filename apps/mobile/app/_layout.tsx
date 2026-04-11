@@ -15,7 +15,12 @@ initSupabase(
 );
 
 if (process.env.EXPO_PUBLIC_NEW_RELIC_APP_TOKEN) {
-  NewRelic.startAgent(process.env.EXPO_PUBLIC_NEW_RELIC_APP_TOKEN, {});
+  NewRelic.startAgent(process.env.EXPO_PUBLIC_NEW_RELIC_APP_TOKEN, {
+    analyticsEventEnabled: true,
+    crashReportingEnabled: true,
+    networkRequestEnabled: true,
+    networkErrorRequestEnabled: true,
+  });
 }
 
 function AuthGuard() {
