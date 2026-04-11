@@ -1,5 +1,4 @@
 name: Infrastructure (OpenTofu)
-
 on:
   pull_request:
     branches: [main]
