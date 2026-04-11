@@ -46,11 +46,6 @@ variable "vm_ssh_public_key" {
   sensitive   = true
 }
 
-variable "vm_custom_data" {
-  description = "Base64-encoded cloud-init user-data content for the VM (generated from infra/vm/cloud-init.yaml)"
-  type        = string
-  default     = null
-}
 
 variable "backups_storage_account_name" {
   description = "Name of the storage account to create for project backups"

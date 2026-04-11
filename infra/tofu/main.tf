@@ -196,8 +196,8 @@ resource "azurerm_linux_virtual_machine" "vm" {
   admin_username      = var.vm_admin_username
   tags                = local.tags
 
-  # Cloud-init user data — installed separately by co-kkd.5 polecat task
-  custom_data = var.vm_custom_data
+  # Cloud-init user data — read directly from repo so CI never needs a separate variable
+  custom_data = filebase64("${path.module}/../vm/cloud-init.yaml")
 
   network_interface_ids = [azurerm_network_interface.vm.id]
 
