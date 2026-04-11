@@ -70,13 +70,21 @@ The workflow authenticates to Azure via OIDC — no stored credentials in GitHub
   1. Name: `constellation-github-actions`. 
   2. Supported account types: **Accounts in this organizational directory only (Single tenant)**. 
   3. Redirect URI: leave blank.
-2. Under Manage → Certificates & secrets → Federated credentials → Add credential:
+2. Under Manage → Certificates & secrets → Federated credentials, add **two** credentials:
+
+   **Credential 1 — for merges to main (tofu apply):**
    - Scenario: GitHub Actions
    - Organization: your GitHub username or org
    - Repository: `constellation-gasworks`
    - Entity: Branch → `main`
-   - Name: `constellation-github-actions`.
-   - Description: `Credentials for github actions from constellation-gasworks repo`.
+   - Name: `constellation-github-actions-main`
+
+   **Credential 2 — for pull requests (tofu plan):**
+   - Scenario: GitHub Actions
+   - Organization: your GitHub username or org
+   - Repository: `constellation-gasworks`
+   - Entity: **Pull request**
+   - Name: `constellation-github-actions-pr`
 3. Note the **Client ID** and **Tenant ID** — both are on the app registration's **Overview** page (navigate back to it after adding the credential). Find your **Subscription ID** separately by searching "Subscriptions" in the Azure portal top search bar.
 4. In the Azure portal, search "Subscriptions" → click your subscription → left sidebar: **Access control (IAM)** → Add → Add role assignment → Privileged Administrator Roles
   2. Role: **Contributor** (the built-in role: "Grants full access to manage all resources, but does not allow you to assign roles in Azure RBAC"
