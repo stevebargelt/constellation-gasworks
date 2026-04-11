@@ -23,8 +23,9 @@ if (import.meta.env.VITE_NEW_RELIC_APP_ID && import.meta.env.VITE_NEW_RELIC_LICE
 
 if (import.meta.env.VITE_POSTHOG_KEY) {
   posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
-    api_host: "https://app.posthog.com",
+    api_host: import.meta.env.VITE_POSTHOG_HOST ?? "https://app.posthog.com",
     autocapture: true,
+    session_recording: { maskAllInputs: true },
   });
 }
 
