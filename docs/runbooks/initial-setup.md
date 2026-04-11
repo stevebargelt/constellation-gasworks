@@ -124,7 +124,7 @@ Required for deploy workflow (Vercel + EAS):
 
 | Name | Value |
 |---|---|
-| `VERCEL_TOKEN` | vercel.com → Settings → Tokens |
+| `VERCEL_TOKEN` | vercel.com → Account Settings → Tokens → Create token: name `constellation-github-actions`, scope `Steve's Projects`, no expiration |
 | `VERCEL_ORG_ID` | vercel.com → Settings → General → Team ID |
 | `VERCEL_PROJECT_ID` | Vercel project → Settings → General → Project ID |
 | `EXPO_TOKEN` | expo.dev → Account Settings → Access Tokens |
