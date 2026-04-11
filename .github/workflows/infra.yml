@@ -63,8 +63,13 @@ jobs:
         id: plan
         run: set -o pipefail && tofu plan -no-color -out=tfplan 2>&1 | tee plan.txt
         env:
-          TF_VAR_vm_ssh_public_key: ${{ secrets.TF_VAR_VM_SSH_PUBLIC_KEY }}
+          # Non-secret vars (override defaults or not in terraform.tfvars in CI — file is gitignored)
+          TF_VAR_resource_group_name: constellation
+          TF_VAR_location: westus3
+          TF_VAR_tfstate_storage_account: hbconstellationtfstate
           TF_VAR_backups_storage_account_name: ${{ vars.TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME }}
+          # Secrets
+          TF_VAR_vm_ssh_public_key: ${{ secrets.TF_VAR_VM_SSH_PUBLIC_KEY }}
           TF_VAR_constellation_jwt_secret: ${{ secrets.TF_VAR_CONSTELLATION_JWT_SECRET }}
           TF_VAR_constellation_postgres_password: ${{ secrets.TF_VAR_CONSTELLATION_POSTGRES_PASSWORD }}
           TF_VAR_constellation_anon_key: ${{ secrets.TF_VAR_CONSTELLATION_ANON_KEY }}
@@ -141,8 +146,13 @@ jobs:
       - name: OpenTofu Apply
         run: tofu apply -auto-approve
         env:
-          TF_VAR_vm_ssh_public_key: ${{ secrets.TF_VAR_VM_SSH_PUBLIC_KEY }}
+          # Non-secret vars (override defaults or not in terraform.tfvars in CI — file is gitignored)
+          TF_VAR_resource_group_name: constellation
+          TF_VAR_location: westus3
+          TF_VAR_tfstate_storage_account: hbconstellationtfstate
           TF_VAR_backups_storage_account_name: ${{ vars.TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME }}
+          # Secrets
+          TF_VAR_vm_ssh_public_key: ${{ secrets.TF_VAR_VM_SSH_PUBLIC_KEY }}
           TF_VAR_constellation_jwt_secret: ${{ secrets.TF_VAR_CONSTELLATION_JWT_SECRET }}
           TF_VAR_constellation_postgres_password: ${{ secrets.TF_VAR_CONSTELLATION_POSTGRES_PASSWORD }}
           TF_VAR_constellation_anon_key: ${{ secrets.TF_VAR_CONSTELLATION_ANON_KEY }}
