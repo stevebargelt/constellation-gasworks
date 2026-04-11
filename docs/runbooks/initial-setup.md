@@ -175,6 +175,7 @@ On merge, `tofu apply` runs automatically and provisions: VM, managed disk, stat
 After apply completes, capture the VM IP:
 ```bash
 cd infra/tofu
+tofu init   # initializes the azurerm backend against the remote state
 tofu output vm_public_ip
 ```
 
