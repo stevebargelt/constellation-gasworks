@@ -31,6 +31,13 @@ provider "azurerm" {
 # Resource Group
 # ---------------------------------------------------------------------------
 
+# The resource group was created manually during bootstrap (Step 2 of initial-setup.md).
+# This import block brings it under OpenTofu management on first apply.
+import {
+  to = azurerm_resource_group.main
+  id = "/subscriptions/c7e800cb-0ee6-4175-9605-a6b97c6f419f/resourceGroups/constellation"
+}
+
 resource "azurerm_resource_group" "main" {
   name     = var.resource_group_name
   location = var.location
