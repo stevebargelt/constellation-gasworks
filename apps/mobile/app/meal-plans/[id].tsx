@@ -75,7 +75,7 @@ function SlotButton({ slot, recipes, mealPlanId, dayOfWeek, mealType, onUpsert, 
               { text: "Cancel", style: "cancel" },
               {
                 text: "Save",
-                onPress: (text) => {
+                onPress: (text: string | undefined) => {
                   if (text?.trim()) {
                     onUpsert({
                       meal_plan_id: mealPlanId,

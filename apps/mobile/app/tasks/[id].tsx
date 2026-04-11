@@ -394,11 +394,11 @@ export default function TaskListDetailScreen() {
     });
   }, [taskListId, user]);
 
-  const handleSave = async (data: Parameters<typeof create>[0]) => {
+  const handleSave = async (data: Omit<Task, "id" | "creator_id" | "completed_at" | "updated_at"> | Partial<Omit<Task, "id" | "creator_id" | "updated_at">>) => {
     if (editingTask) {
-      await update(editingTask.id, data);
+      await update(editingTask.id, data as Partial<Omit<Task, "id" | "creator_id" | "updated_at">>);
     } else {
-      await create(data as Parameters<typeof create>[0]);
+      await create(data as Omit<Task, "id" | "creator_id" | "completed_at" | "updated_at">);
     }
     setModalOpen(false);
     setEditingTask(null);
@@ -581,7 +581,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: "hidden",
   },
-  statusInProgress: { backgroundColor: theme.colors.warning?.[900] ?? "#422006", color: theme.colors.warning?.[300] ?? "#fcd34d" },
+  statusInProgress: { backgroundColor: theme.colors.warning.dark, color: theme.colors.warning.light },
   taskContent: { flex: 1 },
   taskTitle: { color: theme.colors.neutral[50], fontSize: 14, fontWeight: "600" },
   taskDesc: { color: theme.colors.neutral[400], fontSize: 12, marginTop: 2 },
@@ -599,12 +599,12 @@ const styles = StyleSheet.create({
   assigneeName: { color: theme.colors.neutral[300], fontSize: 11 },
   taskActions: { gap: 6 },
   actionEdit: { color: theme.colors.neutral[400], fontSize: 12 },
-  actionDelete: { color: theme.colors.error[400], fontSize: 12 },
+  actionDelete: { color: theme.colors.error.light, fontSize: 12 },
 });
 
 const swipe = StyleSheet.create({
   action: {
-    backgroundColor: theme.colors.success?.[600] ?? "#16a34a",
+    backgroundColor: theme.colors.success.DEFAULT,
     justifyContent: "center",
     alignItems: "flex-end",
     paddingHorizontal: 20,
