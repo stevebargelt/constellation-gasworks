@@ -201,7 +201,7 @@ dig constellation.db.harebrained-apps.com
 ## Step 7 — Verify VM and start Constellation Supabase (~10 min)
 
 ```bash
-ssh azureuser@<vm_public_ip>
+ssh -i ~/.ssh/id_rsa_azure azureuser@<vm_public_ip>
 
 # Verify cloud-init completed
 sudo cloud-init status
@@ -298,7 +298,7 @@ EXPO_PUBLIC_POSTHOG_KEY=
 **Test the backup script manually** before relying on it:
 
 ```bash
-ssh azureuser@<vm_public_ip>
+ssh -i ~/.ssh/id_rsa_azure azureuser@<vm_public_ip>
 sudo /opt/supabase/scripts/backup.sh
 ```
 
