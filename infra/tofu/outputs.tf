@@ -23,6 +23,21 @@ output "dns_zone_name_servers" {
   value       = azurerm_dns_zone.main.name_servers
 }
 
+output "dns_zone_name" {
+  description = "Name of the Azure DNS zone (e.g. db.harebrained-apps.com)"
+  value       = azurerm_dns_zone.main.name
+}
+
+output "key_vault_uri" {
+  description = "URI of the Key Vault (e.g. https://kv-constellation.vault.azure.net/) — used by load-secrets.sh"
+  value       = azurerm_key_vault.main.vault_uri
+}
+
+output "backups_storage_account_name" {
+  description = "Name of the Azure Storage Account used for pg_dump backup archives"
+  value       = azurerm_storage_account.backups.name
+}
+
 output "resource_group_name" {
   description = "Name of the resource group containing all resources"
   value       = azurerm_resource_group.main.name

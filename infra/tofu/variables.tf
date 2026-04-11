@@ -57,11 +57,6 @@ variable "backups_storage_account_name" {
   type        = string
 }
 
-variable "vm_managed_identity_principal_id" {
-  description = "Principal ID of the VM's user-assigned managed identity (for role assignments)"
-  type        = string
-}
-
 variable "common_tags" {
   description = "Tags applied to all managed resources"
   type        = map(string)

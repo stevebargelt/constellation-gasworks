@@ -80,5 +80,5 @@ resource "azurerm_storage_management_policy" "backups" {
 resource "azurerm_role_assignment" "vm_backup_contributor" {
   scope                = azurerm_storage_account.backups.id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = var.vm_managed_identity_principal_id
+  principal_id         = azurerm_user_assigned_identity.vm.principal_id
 }
