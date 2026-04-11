@@ -3,11 +3,11 @@
 # Sensitive values (ssh public key, etc.) can also be passed as TF_VAR_* env vars in CI.
 
 project_name            = "constellation"
-resource_group_name     = "rg-constellation"
+resource_group_name     = "constellation"
 location                = "eastus"
 environment             = "production"
 dns_zone_name           = "db.harebrained-apps.com"
-tfstate_storage_account = "stconstellationtfstate"   # Must match bootstrapped account name
+tfstate_storage_account = "hbconstellationtfstate"   # Must match bootstrapped account name
 vm_admin_username       = "azureuser"
 
 # vm_ssh_public_key — provide via TF_VAR_vm_ssh_public_key in CI, or set here for local runs
@@ -18,8 +18,8 @@ vm_admin_username       = "azureuser"
 # Leave null to provision the VM without cloud-init (manual setup required)
 # vm_custom_data = null
 
-# Storage — backups account (tfstate account is pre-bootstrapped, name set above)
-backups_storage_account_name = "stconstellationbackups"
+# backups_storage_account_name — set via GitHub Actions variable TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME in CI.
+# For local runs: export TF_VAR_backups_storage_account_name=hbconstellationbackups
 
 # VM managed identity principal ID — set to the output from the identity/VM resources
 # vm_managed_identity_principal_id = "<principal-id-from-tofu-output>"

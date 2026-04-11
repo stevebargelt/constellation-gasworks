@@ -1,5 +1,4 @@
 name: Infrastructure (OpenTofu)
-
 on:
   pull_request:
     branches: [main]
@@ -29,6 +28,11 @@ jobs:
     defaults:
       run:
         working-directory: ${{ env.WORKING_DIR }}
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
     steps:
       - name: Checkout
@@ -57,9 +61,20 @@ jobs:
 
       - name: OpenTofu Plan
         id: plan
-        run: tofu plan -no-color -out=tfplan 2>&1 | tee plan.txt
+        run: set -o pipefail && tofu plan -no-color -out=tfplan 2>&1 | tee plan.txt
         env:
+          # Non-secret vars (override defaults or not in terraform.tfvars in CI — file is gitignored)
+          TF_VAR_resource_group_name: constellation
+          TF_VAR_location: westus3
+          TF_VAR_tfstate_storage_account: hbconstellationtfstate
+          TF_VAR_backups_storage_account_name: ${{ vars.TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME }}
+          # Secrets
           TF_VAR_vm_ssh_public_key: ${{ secrets.TF_VAR_VM_SSH_PUBLIC_KEY }}
+          TF_VAR_constellation_jwt_secret: ${{ secrets.TF_VAR_CONSTELLATION_JWT_SECRET }}
+          TF_VAR_constellation_postgres_password: ${{ secrets.TF_VAR_CONSTELLATION_POSTGRES_PASSWORD }}
+          TF_VAR_constellation_anon_key: ${{ secrets.TF_VAR_CONSTELLATION_ANON_KEY }}
+          TF_VAR_constellation_service_role_key: ${{ secrets.TF_VAR_CONSTELLATION_SERVICE_ROLE_KEY }}
+          TF_VAR_resend_api_key: ${{ secrets.TF_VAR_RESEND_API_KEY }}
 
       - name: Post Plan as PR Comment
         uses: actions/github-script@v7
@@ -68,7 +83,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const plan = fs.readFileSync('${{ env.WORKING_DIR }}/plan.txt', 'utf8');
+            const planPath = '${{ env.WORKING_DIR }}/plan.txt';
+            const plan = fs.existsSync(planPath) ? fs.readFileSync(planPath, 'utf8') : '(plan output not available — tofu init or plan step failed)';
             const maxLength = 65000;
             const truncated = plan.length > maxLength
               ? plan.slice(0, maxLength) + '\n\n[...output truncated...]'
@@ -102,6 +118,11 @@ jobs:
       run:
         working-directory: ${{ env.WORKING_DIR }}
     environment: production
+    env:
+      ARM_USE_OIDC: true
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
     steps:
       - name: Checkout
@@ -125,4 +146,15 @@ jobs:
       - name: OpenTofu Apply
         run: tofu apply -auto-approve
         env:
+          # Non-secret vars (override defaults or not in terraform.tfvars in CI — file is gitignored)
+          TF_VAR_resource_group_name: constellation
+          TF_VAR_location: westus3
+          TF_VAR_tfstate_storage_account: hbconstellationtfstate
+          TF_VAR_backups_storage_account_name: ${{ vars.TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME }}
+          # Secrets
           TF_VAR_vm_ssh_public_key: ${{ secrets.TF_VAR_VM_SSH_PUBLIC_KEY }}
+          TF_VAR_constellation_jwt_secret: ${{ secrets.TF_VAR_CONSTELLATION_JWT_SECRET }}
+          TF_VAR_constellation_postgres_password: ${{ secrets.TF_VAR_CONSTELLATION_POSTGRES_PASSWORD }}
+          TF_VAR_constellation_anon_key: ${{ secrets.TF_VAR_CONSTELLATION_ANON_KEY }}
+          TF_VAR_constellation_service_role_key: ${{ secrets.TF_VAR_CONSTELLATION_SERVICE_ROLE_KEY }}
+          TF_VAR_resend_api_key: ${{ secrets.TF_VAR_RESEND_API_KEY }}

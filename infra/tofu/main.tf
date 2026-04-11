@@ -11,8 +11,8 @@ terraform {
   # Remote state backend — the storage account + container must be pre-bootstrapped
   # (see docs/runbooks/bootstrap.md) before running tofu init/apply.
   backend "azurerm" {
-    resource_group_name  = "rg-constellation-infra"
-    storage_account_name = var.tfstate_storage_account
+    resource_group_name  = "constellation"
+    storage_account_name = "hbconstellationtfstate"
     container_name       = "tfstate"
     key                  = "constellation.tfstate"
   }

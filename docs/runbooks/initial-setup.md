@@ -45,17 +45,17 @@ This must happen before `tofu apply` — OpenTofu stores its state in Blob Stora
 ```bash
 az login
 
-az group create --name rg-constellation --location eastus
+az group create --name constellation --location eastus
 
 az storage account create \
-  --name stconstellationtfstate \
-  --resource-group rg-constellation \
+  --name hbconstellationtfstate \
+  --resource-group constellation \
   --sku Standard_LRS \
   --allow-blob-public-access false
 
 az storage container create \
   --name tfstate \
-  --account-name stconstellationtfstate
+  --account-name hbconstellationtfstate
 ```
 
 ---
@@ -70,13 +70,21 @@ The workflow authenticates to Azure via OIDC — no stored credentials in GitHub
   1. Name: `constellation-github-actions`. 
   2. Supported account types: **Accounts in this organizational directory only (Single tenant)**. 
   3. Redirect URI: leave blank.
-2. Under Manage → Certificates & secrets → Federated credentials → Add credential:
+2. Under Manage → Certificates & secrets → Federated credentials, add **two** credentials:
+
+   **Credential 1 — for merges to main (tofu apply):**
    - Scenario: GitHub Actions
    - Organization: your GitHub username or org
    - Repository: `constellation-gasworks`
    - Entity: Branch → `main`
-   - Name: `constellation-github-actions`.
-   - Description: `Credentials for github actions from constellation-gasworks repo`.
+   - Name: `constellation-github-actions-main`
+
+   **Credential 2 — for pull requests (tofu plan):**
+   - Scenario: GitHub Actions
+   - Organization: your GitHub username or org
+   - Repository: `constellation-gasworks`
+   - Entity: **Pull request**
+   - Name: `constellation-github-actions-pr`
 3. Note the **Client ID** and **Tenant ID** — both are on the app registration's **Overview** page (navigate back to it after adding the credential). Find your **Subscription ID** separately by searching "Subscriptions" in the Azure portal top search bar.
 4. In the Azure portal, search "Subscriptions" → click your subscription → left sidebar: **Access control (IAM)** → Add → Add role assignment → Privileged Administrator Roles
   2. Role: **Contributor** (the built-in role: "Grants full access to manage all resources, but does not allow you to assign roles in Azure RBAC"
@@ -85,12 +93,33 @@ The workflow authenticates to Azure via OIDC — no stored credentials in GitHub
 
 **In GitHub (repo → Settings → Secrets and variables → Actions):**
 
-| Type | Name | Value |
-|---|---|---|
-| Variable | `AZURE_CLIENT_ID` | App registration Client ID |
-| Variable | `AZURE_TENANT_ID` | Your Azure Tenant ID |
-| Variable | `AZURE_SUBSCRIPTION_ID` | Your Azure Subscription ID |
-| Secret | `TF_VAR_VM_SSH_PUBLIC_KEY` | `cat ~/.ssh/id_ed25519.pub` |
+Variables (visible in logs):
+
+| Name | Value |
+|---|---|
+| `AZURE_CLIENT_ID` | App registration Client ID |
+| `AZURE_TENANT_ID` | Your Azure Tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Your Azure Subscription ID |
+| `TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME` | Globally unique name for backup storage (e.g. `hbconstellationbackups`) |
+
+Secrets (masked in logs):
+
+| Name | Value |
+|---|---|
+| `TF_VAR_VM_SSH_PUBLIC_KEY` | RSA public key — Azure VMs do not support ed25519. Generate: `ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa_azure -N ""` then `cat ~/.ssh/id_rsa_azure.pub` |
+| `TF_VAR_CONSTELLATION_JWT_SECRET` | JWT secret from Step 1 |
+| `TF_VAR_CONSTELLATION_POSTGRES_PASSWORD` | Postgres password from Step 1 |
+| `TF_VAR_CONSTELLATION_ANON_KEY` | Anon JWT from Step 1 |
+| `TF_VAR_CONSTELLATION_SERVICE_ROLE_KEY` | Service role JWT from Step 1 |
+| `TF_VAR_RESEND_API_KEY` | From resend.com Settings → API Keys |
+
+Optional (for EAS mobile preview builds in CI):
+
+| Name | Value |
+|---|---|
+| `EXPO_TOKEN` | expo.dev → Account Settings → Access Tokens |
+
+> **Why these names?** The CI workflow passes these directly as `TF_VAR_*` environment variables to OpenTofu. `terraform.tfvars` and `secrets.tfvars` are gitignored and never present in CI — all variable values must come from this table or be hardcoded non-sensitive defaults in the workflow itself.
 
 Also create a GitHub Actions **environment** named `production` (Settings → Environments) — the apply job requires it.
 
@@ -107,12 +136,12 @@ cp secrets.tfvars.example secrets.tfvars
 Fill in `terraform.tfvars`:
 ```hcl
 project_name                 = "constellation"
-resource_group_name          = "rconstellation"
+resource_group_name          = "constellation"
 location                     = "westus3"
 dns_zone_name                = "db.harebrained-apps.com"
-tfstate_storage_account      = "stconstellationtfstate"
+tfstate_storage_account      = "hbconstellationtfstate"
 vm_admin_username            = "azureuser"
-backups_storage_account_name = "stconstellationbackups"
+# backups_storage_account_name is set via GitHub Actions variable TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME — not needed here
 ```
 
 Fill in `secrets.tfvars` with values from Step 1 + your Resend API key:
@@ -123,7 +152,7 @@ constellation_anon_key          = "<anon JWT from Step 1>"
 constellation_service_role_key  = "<service_role JWT from Step 1>"
 resend_api_key                  = "<from resend.com Settings → API Keys>"
 vm_ssh_public_key               = "<your SSH public key string>"
-tfstate_storage_account         = "stconstellationtfstate"
+tfstate_storage_account         = "hbconstellationtfstate"
 ```
 
 Neither file is committed to git (both are gitignored). In CI, secrets are passed as `TF_VAR_*` environment variables.
@@ -146,6 +175,7 @@ On merge, `tofu apply` runs automatically and provisions: VM, managed disk, stat
 After apply completes, capture the VM IP:
 ```bash
 cd infra/tofu
+tofu init   # initializes the azurerm backend against the remote state
 tofu output vm_public_ip
 ```
 
@@ -172,7 +202,7 @@ dig constellation.db.harebrained-apps.com
 ## Step 7 — Verify VM and start Constellation Supabase (~10 min)
 
 ```bash
-ssh azureuser@<vm_public_ip>
+ssh -i ~/.ssh/id_rsa_azure azureuser@<vm_public_ip>
 
 # Verify cloud-init completed
 sudo cloud-init status
@@ -269,14 +299,14 @@ EXPO_PUBLIC_POSTHOG_KEY=
 **Test the backup script manually** before relying on it:
 
 ```bash
-ssh azureuser@<vm_public_ip>
+ssh -i ~/.ssh/id_rsa_azure azureuser@<vm_public_ip>
 sudo /opt/supabase/scripts/backup.sh
 ```
 
 Verify the dump appeared in Blob Storage:
 ```bash
 az storage blob list \
-  --account-name stconstellationbackups \
+  --account-name <backups_storage_account_name from terraform.tfvars> \
   --container-name backups \
   --output table
 ```

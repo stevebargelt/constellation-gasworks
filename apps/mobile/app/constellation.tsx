@@ -162,7 +162,8 @@ export default function ConstellationScreen() {
   }));
 
   function handleNodePress(id: string) {
-    router.push(`/relationships/${id}`);
+    // TODO: create app/relationships/[id].tsx detail screen
+    router.push(`/relationships/${id}` as never);
   }
 
   // Compute cluster hulls
