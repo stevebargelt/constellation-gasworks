@@ -45,17 +45,17 @@ This must happen before `tofu apply` — OpenTofu stores its state in Blob Stora
 ```bash
 az login
 
-az group create --name rg-constellation --location eastus
+az group create --name constellation --location eastus
 
 az storage account create \
-  --name stconstellationtfstate \
-  --resource-group rg-constellation \
+  --name hbconstellationtfstate \
+  --resource-group constellation \
   --sku Standard_LRS \
   --allow-blob-public-access false
 
 az storage container create \
   --name tfstate \
-  --account-name stconstellationtfstate
+  --account-name hbconstellationtfstate
 ```
 
 ---
@@ -110,9 +110,9 @@ project_name                 = "constellation"
 resource_group_name          = "rconstellation"
 location                     = "westus3"
 dns_zone_name                = "db.harebrained-apps.com"
-tfstate_storage_account      = "stconstellationtfstate"
+tfstate_storage_account      = "hbconstellationtfstate"
 vm_admin_username            = "azureuser"
-backups_storage_account_name = "stconstellationbackups"
+backups_storage_account_name = "<choose a globally unique name, e.g. hbconstellationbackups>"
 ```
 
 Fill in `secrets.tfvars` with values from Step 1 + your Resend API key:
@@ -123,7 +123,7 @@ constellation_anon_key          = "<anon JWT from Step 1>"
 constellation_service_role_key  = "<service_role JWT from Step 1>"
 resend_api_key                  = "<from resend.com Settings → API Keys>"
 vm_ssh_public_key               = "<your SSH public key string>"
-tfstate_storage_account         = "stconstellationtfstate"
+tfstate_storage_account         = "hbconstellationtfstate"
 ```
 
 Neither file is committed to git (both are gitignored). In CI, secrets are passed as `TF_VAR_*` environment variables.
@@ -276,7 +276,7 @@ sudo /opt/supabase/scripts/backup.sh
 Verify the dump appeared in Blob Storage:
 ```bash
 az storage blob list \
-  --account-name stconstellationbackups \
+  --account-name <backups_storage_account_name from terraform.tfvars> \
   --container-name backups \
   --output table
 ```
