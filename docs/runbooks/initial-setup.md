@@ -237,6 +237,19 @@ All containers should show `healthy` or `running`. Caddy will automatically obta
 
 ---
 
+## Step 7a — Link the mobile app to your Expo account (~2 min)
+
+Run once locally to link the project and get the EAS project ID:
+
+```bash
+cd apps/mobile
+eas init
+```
+
+EAS will print a `projectId` and warn that it can't auto-write to `app.config.js` (dynamic config). Manually add it to `app.config.js` under `expo.extra.eas.projectId`, then commit.
+
+---
+
 ## Step 7b — Set EAS secrets for mobile builds
 
 Once Supabase is running on the VM, set the mobile app env vars as EAS secrets so builds pick them up:
