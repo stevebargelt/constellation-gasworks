@@ -59,6 +59,7 @@ jobs:
         run: set -o pipefail && tofu plan -no-color -out=tfplan 2>&1 | tee plan.txt
         env:
           TF_VAR_vm_ssh_public_key: ${{ secrets.TF_VAR_VM_SSH_PUBLIC_KEY }}
+          TF_VAR_backups_storage_account_name: ${{ vars.TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME }}
 
       - name: Post Plan as PR Comment
         uses: actions/github-script@v7
@@ -126,3 +127,4 @@ jobs:
         run: tofu apply -auto-approve
         env:
           TF_VAR_vm_ssh_public_key: ${{ secrets.TF_VAR_VM_SSH_PUBLIC_KEY }}
+          TF_VAR_backups_storage_account_name: ${{ vars.TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME }}
