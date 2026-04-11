@@ -93,13 +93,33 @@ The workflow authenticates to Azure via OIDC — no stored credentials in GitHub
 
 **In GitHub (repo → Settings → Secrets and variables → Actions):**
 
-| Type | Name | Value |
-|---|---|---|
-| Variable | `AZURE_CLIENT_ID` | App registration Client ID |
-| Variable | `AZURE_TENANT_ID` | Your Azure Tenant ID |
-| Variable | `AZURE_SUBSCRIPTION_ID` | Your Azure Subscription ID |
-| Variable | `TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME` | Globally unique name for backup storage (e.g. `hbconstellationbackups`) |
-| Secret | `TF_VAR_VM_SSH_PUBLIC_KEY` | `cat ~/.ssh/id_ed25519.pub` |
+Variables (visible in logs):
+
+| Name | Value |
+|---|---|
+| `AZURE_CLIENT_ID` | App registration Client ID |
+| `AZURE_TENANT_ID` | Your Azure Tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Your Azure Subscription ID |
+| `TF_VAR_BACKUPS_STORAGE_ACCOUNT_NAME` | Globally unique name for backup storage (e.g. `hbconstellationbackups`) |
+
+Secrets (masked in logs):
+
+| Name | Value |
+|---|---|
+| `TF_VAR_VM_SSH_PUBLIC_KEY` | `cat ~/.ssh/id_ed25519.pub` |
+| `TF_VAR_CONSTELLATION_JWT_SECRET` | JWT secret from Step 1 |
+| `TF_VAR_CONSTELLATION_POSTGRES_PASSWORD` | Postgres password from Step 1 |
+| `TF_VAR_CONSTELLATION_ANON_KEY` | Anon JWT from Step 1 |
+| `TF_VAR_CONSTELLATION_SERVICE_ROLE_KEY` | Service role JWT from Step 1 |
+| `TF_VAR_RESEND_API_KEY` | From resend.com Settings → API Keys |
+
+Optional (for EAS mobile preview builds in CI):
+
+| Name | Value |
+|---|---|
+| `EXPO_TOKEN` | expo.dev → Account Settings → Access Tokens |
+
+> **Why these names?** The CI workflow passes these directly as `TF_VAR_*` environment variables to OpenTofu. `terraform.tfvars` and `secrets.tfvars` are gitignored and never present in CI — all variable values must come from this table or be hardcoded non-sensitive defaults in the workflow itself.
 
 Also create a GitHub Actions **environment** named `production` (Settings → Environments) — the apply job requires it.
 
@@ -116,7 +136,7 @@ cp secrets.tfvars.example secrets.tfvars
 Fill in `terraform.tfvars`:
 ```hcl
 project_name                 = "constellation"
-resource_group_name          = "rconstellation"
+resource_group_name          = "constellation"
 location                     = "westus3"
 dns_zone_name                = "db.harebrained-apps.com"
 tfstate_storage_account      = "hbconstellationtfstate"
