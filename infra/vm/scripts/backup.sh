@@ -11,8 +11,40 @@
 #
 # Each project must have a .env file at /opt/supabase-{project}/.env containing:
 #   POSTGRES_PASSWORD=...
+#
+# ---------------------------------------------------------------------------
+# RESTORE INSTRUCTIONS
+# ---------------------------------------------------------------------------
+# To restore a project from a backup:
+#
+#   1. Download the backup from Azure Blob Storage:
+#        az storage blob download \
+#          --account-name <STORAGE_ACCOUNT> \
+#          --container-name backups \
+#          --name <project>/YYYY-MM-DD.sql.gz \
+#          --file /tmp/restore.sql.gz \
+#          --auth-mode login
+#
+#   2. Decompress:
+#        gunzip /tmp/restore.sql.gz
+#
+#   3. Restore into Postgres (adjust host/port/password as needed):
+#        PGPASSWORD=<postgres_password> psql \
+#          --host=127.0.0.1 \
+#          --port=<DB_PORT> \
+#          --username=postgres \
+#          postgres < /tmp/restore.sql
+#
+#   4. Restart the Supabase stack to pick up restored state:
+#        cd /opt/supabase-<project> && docker compose restart
+# ---------------------------------------------------------------------------
 
 set -euo pipefail
+
+# Tee all output (stdout + stderr) to the log file so systemd journal and the
+# log file stay in sync. Append so previous runs are preserved for audit.
+LOG_FILE="/var/log/supabase-backup.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
 
 # ---------------------------------------------------------------------------
 # Configuration
