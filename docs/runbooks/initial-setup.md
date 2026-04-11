@@ -237,6 +237,20 @@ All containers should show `healthy` or `running`. Caddy will automatically obta
 
 ---
 
+## Step 7b — Set EAS secrets for mobile builds
+
+Once Supabase is running on the VM, set the mobile app env vars as EAS secrets so builds pick them up:
+
+```bash
+cd apps/mobile
+eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value "https://constellation.db.harebrained-apps.com"
+eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY --value "<anon key from Step 1>"
+```
+
+These replace the empty values that were previously (incorrectly) hardcoded in `eas.json`.
+
+---
+
 ## Step 8 — Apply database migrations (~5 min)
 
 From your local machine:
