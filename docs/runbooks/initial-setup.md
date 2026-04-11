@@ -125,9 +125,9 @@ Required for deploy workflow (Vercel + EAS):
 | Name | Value |
 |---|---|
 | `VERCEL_TOKEN` | vercel.com → Account Settings → Tokens → Create token: name `constellation-github-actions`, scope `Steve's Projects`, no expiration |
-| `VERCEL_ORG_ID` | vercel.com → Settings → General → Team ID |
-| `VERCEL_PROJECT_ID` | Vercel project → Settings → General → Project ID |
-| `EXPO_TOKEN` | expo.dev → Account Settings → Access Tokens |
+| `VERCEL_ORG_ID` | TODO: document exact location in Vercel UI |
+| `VERCEL_PROJECT_ID` | TODO: document exact location in Vercel UI |
+| `EXPO_TOKEN` | expo.dev → Robot Users → Create robot user named `constellation-mobile-app`, role `Developer` → create token named `constellation-mobile-app` → copy token value |
 
 > **Why these names?** The CI workflow passes these directly as `TF_VAR_*` environment variables to OpenTofu. `terraform.tfvars` and `secrets.tfvars` are gitignored and never present in CI — all variable values must come from this table or be hardcoded non-sensitive defaults in the workflow itself.
 
