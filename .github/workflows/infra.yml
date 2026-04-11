@@ -56,7 +56,7 @@ jobs:
 
       - name: OpenTofu Plan
         id: plan
-        run: tofu plan -no-color -out=tfplan 2>&1 | tee plan.txt
+        run: set -o pipefail && tofu plan -no-color -out=tfplan 2>&1 | tee plan.txt
         env:
           TF_VAR_vm_ssh_public_key: ${{ secrets.TF_VAR_VM_SSH_PUBLIC_KEY }}
 
@@ -67,7 +67,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const plan = fs.readFileSync('${{ env.WORKING_DIR }}/plan.txt', 'utf8');
+            const planPath = '${{ env.WORKING_DIR }}/plan.txt';
+            const plan = fs.existsSync(planPath) ? fs.readFileSync(planPath, 'utf8') : '(plan output not available — tofu init or plan step failed)';
             const maxLength = 65000;
             const truncated = plan.length > maxLength
               ? plan.slice(0, maxLength) + '\n\n[...output truncated...]'
