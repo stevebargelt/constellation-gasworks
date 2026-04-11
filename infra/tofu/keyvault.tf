@@ -50,6 +50,18 @@ resource "azurerm_role_assignment" "vm_keyvault_secrets_user" {
 }
 
 # ---------------------------------------------------------------------------
+# Role assignment: CI service principal → Key Vault Secrets Officer
+# Required for tofu apply to create/update secrets in the vault.
+# Uses the current client identity (the GitHub Actions service principal).
+# ---------------------------------------------------------------------------
+
+resource "azurerm_role_assignment" "deployer_keyvault_secrets_officer" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+# ---------------------------------------------------------------------------
 # Constellation project secrets
 # ---------------------------------------------------------------------------
 
@@ -58,7 +70,7 @@ resource "azurerm_key_vault_secret" "constellation_jwt_secret" {
   value        = var.constellation_jwt_secret
   key_vault_id = azurerm_key_vault.main.id
 
-  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user]
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
 }
 
 resource "azurerm_key_vault_secret" "constellation_postgres_password" {
@@ -66,7 +78,7 @@ resource "azurerm_key_vault_secret" "constellation_postgres_password" {
   value        = var.constellation_postgres_password
   key_vault_id = azurerm_key_vault.main.id
 
-  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user]
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
 }
 
 resource "azurerm_key_vault_secret" "constellation_anon_key" {
@@ -74,7 +86,7 @@ resource "azurerm_key_vault_secret" "constellation_anon_key" {
   value        = var.constellation_anon_key
   key_vault_id = azurerm_key_vault.main.id
 
-  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user]
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
 }
 
 resource "azurerm_key_vault_secret" "constellation_service_role_key" {
@@ -82,7 +94,7 @@ resource "azurerm_key_vault_secret" "constellation_service_role_key" {
   value        = var.constellation_service_role_key
   key_vault_id = azurerm_key_vault.main.id
 
-  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user]
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
 }
 
 # ---------------------------------------------------------------------------
@@ -94,5 +106,5 @@ resource "azurerm_key_vault_secret" "resend_api_key" {
   value        = var.resend_api_key
   key_vault_id = azurerm_key_vault.main.id
 
-  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user]
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
 }
