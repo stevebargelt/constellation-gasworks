@@ -106,7 +106,7 @@ Secrets (masked in logs):
 
 | Name | Value |
 |---|---|
-| `TF_VAR_VM_SSH_PUBLIC_KEY` | `cat ~/.ssh/id_ed25519.pub` |
+| `TF_VAR_VM_SSH_PUBLIC_KEY` | RSA public key — Azure VMs do not support ed25519. Generate: `ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa_azure -N ""` then `cat ~/.ssh/id_rsa_azure.pub` |
 | `TF_VAR_CONSTELLATION_JWT_SECRET` | JWT secret from Step 1 |
 | `TF_VAR_CONSTELLATION_POSTGRES_PASSWORD` | Postgres password from Step 1 |
 | `TF_VAR_CONSTELLATION_ANON_KEY` | Anon JWT from Step 1 |
