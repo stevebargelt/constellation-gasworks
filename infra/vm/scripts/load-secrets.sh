@@ -10,17 +10,20 @@
 #   PROJECTS       — space-separated list of project slugs (e.g. "constellation")
 #
 # Key Vault secret naming convention (per project):
-#   {PROJECT_UPPER}_JWT_SECRET         → JWT_SECRET
-#   {PROJECT_UPPER}_ANON_KEY           → ANON_KEY
-#   {PROJECT_UPPER}_SERVICE_ROLE_KEY   → SERVICE_ROLE_KEY
-#   {PROJECT_UPPER}_POSTGRES_PASSWORD  → POSTGRES_PASSWORD
-#   {PROJECT_UPPER}_DASHBOARD_USERNAME → DASHBOARD_USERNAME
-#   {PROJECT_UPPER}_DASHBOARD_PASSWORD → DASHBOARD_PASSWORD
-#   {PROJECT_UPPER}_SMTP_HOST          → SMTP_HOST
-#   {PROJECT_UPPER}_SMTP_PORT          → SMTP_PORT
-#   {PROJECT_UPPER}_SMTP_USER          → SMTP_USER
-#   {PROJECT_UPPER}_SMTP_PASS          → SMTP_PASS
-#   {PROJECT_UPPER}_SMTP_SENDER_NAME   → SMTP_SENDER_NAME
+#   {PROJECT_UPPER}-JWT-SECRET         → JWT_SECRET
+#   {PROJECT_UPPER}-ANON-KEY           → ANON_KEY
+#   {PROJECT_UPPER}-SERVICE-ROLE-KEY   → SERVICE_ROLE_KEY
+#   {PROJECT_UPPER}-POSTGRES-PASSWORD  → POSTGRES_PASSWORD
+#   {PROJECT_UPPER}-DASHBOARD-USERNAME → DASHBOARD_USERNAME
+#   {PROJECT_UPPER}-DASHBOARD-PASSWORD → DASHBOARD_PASSWORD
+#   {PROJECT_UPPER}-SMTP-HOST          → SMTP_HOST
+#   {PROJECT_UPPER}-SMTP-PORT          → SMTP_PORT
+#   {PROJECT_UPPER}-SMTP-USER          → SMTP_USER
+#   {PROJECT_UPPER}-SMTP-PASS          → SMTP_PASS
+#   {PROJECT_UPPER}-SMTP-SENDER-NAME   → SMTP_SENDER_NAME
+#
+# Shared secrets (not project-scoped):
+#   RESEND-API-KEY                     → RESEND_API_KEY (written to shared.env)
 
 set -euo pipefail
 
@@ -74,5 +77,21 @@ for project in $PROJECTS; do
   mv "$tmp_file" "$env_file"
   echo "Wrote ${env_file}"
 done
+
+# Shared secret: RESEND_API_KEY (written to /opt/supabase-shared/shared.env)
+mkdir -p /opt/supabase-shared
+shared_tmp=$(mktemp "/opt/supabase-shared/.shared.env.XXXXXX")
+chmod 600 "$shared_tmp"
+echo "# Shared secrets — do not edit" > "$shared_tmp"
+
+resend_key=$(az keyvault secret show \
+  --vault-name "$KEYVAULT_NAME" \
+  --name "RESEND-API-KEY" \
+  --query "value" \
+  --output tsv 2>/dev/null) || true
+[ -n "${resend_key:-}" ] && printf 'RESEND_API_KEY=%s\n' "$resend_key" >> "$shared_tmp"
+
+mv "$shared_tmp" /opt/supabase-shared/shared.env
+echo "Wrote /opt/supabase-shared/shared.env"
 
 echo "Secret loading complete."
