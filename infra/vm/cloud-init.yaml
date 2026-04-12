@@ -277,8 +277,10 @@ write_files:
             API_JWT_SECRET: ${JWT_SECRET}
             FLY_ALLOC_ID: fly123
             FLY_APP_NAME: realtime
+            APP_NAME: realtime
             SECRET_KEY_BASE: UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa15BLrx8etQoXz3gZv1/u2oq
             ERL_AFLAGS: -proto_dist inet_tcp
+            RLIMIT_NOFILE: "1024"
             ENABLE_TAILSCALE: "false"
             DNS_NODES: "''"
           depends_on:
@@ -773,6 +775,18 @@ runcmd:
   - systemctl enable --now supabase-secret-loader.service
   - systemctl enable --now supabase-stack.service
   - systemctl enable --now supabase-backup.timer
+
+  # ── 7. Post-start DB setup (runs after supabase-stack starts) ─────────────
+  # Create schemas needed by services (Supabase Postgres image doesn't always
+  # create these on first init depending on the version)
+  - |
+    for i in 1 2 3 4 5; do
+      docker exec constellation-db-1 psql -U supabase_admin -h 127.0.0.1 -d postgres \
+        -c "CREATE SCHEMA IF NOT EXISTS _realtime;" \
+        -c "CREATE SCHEMA IF NOT EXISTS _analytics;" \
+        && break
+      sleep 10
+    done
 
 final_message: |
   cloud-init complete. All services installed and started.
