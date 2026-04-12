@@ -258,7 +258,7 @@ services:
             - admin
 KONG_EOF
 
-  chmod 600 "$kong_file"
+  chmod 644 "$kong_file"
   echo "Wrote ${kong_file}"
 done
 
