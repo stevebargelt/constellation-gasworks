@@ -1,3 +1,5 @@
+# cloud-init embedded via filebase64 — changes to infra/vm/cloud-init.yaml force VM replacement
+
 terraform {
   required_version = ">= 1.6"
 
