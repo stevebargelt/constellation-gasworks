@@ -287,7 +287,10 @@ runcmd:
       apt-get install -y caddy
     fi
   # Ensure caddy system user exists — package postinstall can race on cloud-init
-  - id caddy &>/dev/null || useradd --system --create-home --home-dir /var/lib/caddy --shell /usr/sbin/nologin --comment "Caddy web server" caddy
+  - |
+    id caddy >/dev/null 2>&1 || useradd --system --create-home \
+      --home-dir /var/lib/caddy --shell /usr/sbin/nologin \
+      --comment "Caddy web server" caddy
   - systemctl enable --now caddy
 
   # ── 4. New Relic Infrastructure Agent ─────────────────────────────────────
