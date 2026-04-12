@@ -712,6 +712,22 @@ write_files:
       exit "$overall_exit"
 
 runcmd:
+  # ── 0. Mount data disk (persists across VM recreations) ──────────────────
+  # The 64 GB managed disk (LUN 10) stores Caddy certs, Docker volumes, etc.
+  # Format only if not already formatted; mount to /mnt/data.
+  - |
+    DISK="/dev/disk/azure/scsi1/lun10"
+    MOUNT="/mnt/data"
+    if [ -b "$DISK" ]; then
+      blkid "$DISK" || mkfs.ext4 -F "$DISK"
+      mkdir -p "$MOUNT"
+      if ! grep -q "$MOUNT" /etc/fstab; then
+        echo "$DISK $MOUNT ext4 defaults,nofail 0 2" >> /etc/fstab
+      fi
+      mount -a
+      mkdir -p "$MOUNT/caddy"
+    fi
+
   # ── 1. Docker CE ──────────────────────────────────────────────────────────
   - |
     if ! command -v docker >/dev/null 2>&1; then
@@ -749,6 +765,14 @@ runcmd:
     id caddy >/dev/null 2>&1 || useradd --system --create-home \
       --home-dir /var/lib/caddy --shell /usr/sbin/nologin \
       --comment "Caddy web server" caddy
+  # Symlink Caddy data dir to persistent disk so TLS certs survive VM recreation
+  - |
+    if [ -d /mnt/data/caddy ]; then
+      chown caddy:caddy /mnt/data/caddy
+      mkdir -p /var/lib/caddy/.local/share
+      ln -sfn /mnt/data/caddy /var/lib/caddy/.local/share/caddy
+      chown -h caddy:caddy /var/lib/caddy/.local /var/lib/caddy/.local/share
+    fi
   - systemctl enable --now caddy
 
   # ── 4. New Relic Infrastructure Agent ─────────────────────────────────────
