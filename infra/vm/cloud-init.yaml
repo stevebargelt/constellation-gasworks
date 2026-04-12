@@ -1,8 +1,22 @@
 #cloud-config
 # cloud-init user-data for Constellation Supabase VM on Azure
-# Installs: Docker CE + Compose plugin, Azure CLI, Caddy, New Relic Infrastructure Agent
-# Deploys: secret-loader and backup systemd units, /opt directory structure
-# Idempotent: all steps use apt/snap/systemd patterns safe to re-run
+#
+# This file is the single source of truth for VM provisioning. Everything the
+# VM needs to run Supabase is embedded here: software installation, config
+# files, scripts, docker-compose.yml, and systemd units.
+#
+# Installs: Docker CE + Compose plugin, Azure CLI, Caddy, New Relic Infra Agent
+# Deploys: load-secrets.sh, backup.sh, docker-compose.yml, Kong config,
+#          Caddyfile, systemd units, all config files
+#
+# On first boot:
+#   1. Installs packages
+#   2. Writes all config/script/compose files via write_files
+#   3. Runs runcmd to install Docker/CLI/Caddy
+#   4. Starts supabase-secret-loader (pulls secrets from Key Vault → .env)
+#   5. Starts supabase-stack (docker compose up -d)
+#
+# After cloud-init completes, the VM is fully operational — no SSH required.
 
 package_update: true
 package_upgrade: true
@@ -35,6 +49,14 @@ write_files:
     content: |
       KEYVAULT_NAME=kv-constellation
       PROJECTS=constellation
+      DNS_ZONE=db.harebrained-apps.com
+
+  # ── Backup environment config ─────────────────────────────────────────────
+  - path: /etc/supabase-backup.conf
+    permissions: "0640"
+    owner: root:root
+    content: |
+      STORAGE_ACCOUNT=hbconstellationbackups
 
   # ── Supabase secret-loader systemd service ────────────────────────────────
   - path: /etc/systemd/system/supabase-secret-loader.service
@@ -53,10 +75,28 @@ write_files:
       EnvironmentFile=/etc/supabase-loader.conf
       ExecStart=/opt/scripts/load-secrets.sh
       TimeoutStartSec=120s
-      PrivateTmp=yes
-      NoNewPrivileges=yes
-      ProtectSystem=strict
-      ReadWritePaths=/opt
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # ── Supabase stack systemd service ────────────────────────────────────────
+  - path: /etc/systemd/system/supabase-stack.service
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Constellation Supabase Docker Compose stack
+      After=docker.service supabase-secret-loader.service
+      Requires=docker.service supabase-secret-loader.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      User=root
+      WorkingDirectory=/opt/supabase-constellation
+      ExecStart=/usr/bin/docker compose up -d --wait
+      ExecStop=/usr/bin/docker compose down
+      TimeoutStartSec=300
 
       [Install]
       WantedBy=multi-user.target
@@ -75,6 +115,7 @@ write_files:
       Type=oneshot
       User=root
       EnvironmentFile=/etc/supabase-loader.conf
+      EnvironmentFile=/etc/supabase-backup.conf
       ExecStart=/opt/scripts/backup.sh
       TimeoutStartSec=7200
       StandardOutput=journal
@@ -108,22 +149,256 @@ write_files:
         reverse_proxy localhost:3000
       }
 
+  # ── Docker Compose (Supabase stack) ───────────────────────────────────────
+  - path: /opt/supabase-constellation/docker-compose.yml
+    permissions: "0640"
+    owner: root:root
+    content: |
+      name: constellation
+
+      services:
+
+        # ─── Database ───────────────────────────────────────────────────────
+        db:
+          image: supabase/postgres:15.8.1.060
+          restart: unless-stopped
+          env_file: .env
+          environment:
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            POSTGRES_DB: ${POSTGRES_DB:-postgres}
+            POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+            JWT_SECRET: ${JWT_SECRET}
+            POSTGRES_HOST: /var/run/postgresql
+          volumes:
+            - db-data:/var/lib/postgresql/data
+            - db-config:/etc/postgresql-custom
+          healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
+            interval: 10s
+            timeout: 5s
+            retries: 10
+
+        # ─── Kong API Gateway ───────────────────────────────────────────────
+        kong:
+          image: kong:2.8.1
+          restart: unless-stopped
+          env_file: .env
+          environment:
+            KONG_DATABASE: "off"
+            KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+            KONG_DNS_ORDER: LAST,A,CNAME
+            KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+            KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+            KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+            SUPABASE_ANON_KEY: ${ANON_KEY}
+            SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+            DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-supabase}
+            DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-this_password_is_insecure_and_should_be_updated}
+          ports:
+            - "${KONG_PORT:-8000}:8000"
+          depends_on:
+            db:
+              condition: service_healthy
+          volumes:
+            - ./volumes/api:/var/lib/kong:ro
+
+        # ─── Auth (GoTrue) ──────────────────────────────────────────────────
+        auth:
+          image: supabase/gotrue:v2.170.0
+          restart: unless-stopped
+          env_file: .env
+          environment:
+            GOTRUE_API_HOST: "0.0.0.0"
+            GOTRUE_API_PORT: "9999"
+            API_EXTERNAL_URL: ${API_EXTERNAL_URL}
+            GOTRUE_DB_DRIVER: postgres
+            GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+            GOTRUE_SITE_URL: ${SITE_URL}
+            GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+            GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+            GOTRUE_JWT_ADMIN_ROLES: service_role
+            GOTRUE_JWT_AUD: authenticated
+            GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+            GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+            GOTRUE_JWT_SECRET: ${JWT_SECRET}
+            GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+            GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM:-false}
+            GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+            GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+            GOTRUE_SMTP_USER: ${SMTP_USER:-}
+            GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+            GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-}
+            GOTRUE_MAILER_URLPATHS_INVITE: "${API_EXTERNAL_URL}/auth/v1/verify"
+            GOTRUE_MAILER_URLPATHS_CONFIRMATION: "${API_EXTERNAL_URL}/auth/v1/verify"
+            GOTRUE_MAILER_URLPATHS_RECOVERY: "${API_EXTERNAL_URL}/auth/v1/verify"
+            GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: "${API_EXTERNAL_URL}/auth/v1/verify"
+            GOTRUE_EXTERNAL_GOOGLE_ENABLED: ${ENABLE_GOOGLE_OAUTH:-false}
+            GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+            GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+            GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: "${API_EXTERNAL_URL}/auth/v1/callback"
+          depends_on:
+            db:
+              condition: service_healthy
+
+        # ─── REST (PostgREST) ───────────────────────────────────────────────
+        rest:
+          image: postgrest/postgrest:v12.2.3
+          restart: unless-stopped
+          env_file: .env
+          environment:
+            PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+            PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS:-public,storage,graphql_public}
+            PGRST_DB_ANON_ROLE: anon
+            PGRST_JWT_SECRET: ${JWT_SECRET}
+            PGRST_DB_USE_LEGACY_GUCS: "false"
+            PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
+            PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+          command: postgrest
+          depends_on:
+            db:
+              condition: service_healthy
+
+        # ─── Realtime ───────────────────────────────────────────────────────
+        realtime:
+          image: supabase/realtime:v2.34.47
+          restart: unless-stopped
+          env_file: .env
+          environment:
+            PORT: "4000"
+            DB_HOST: db
+            DB_PORT: "5432"
+            DB_USER: supabase_admin
+            DB_PASSWORD: ${POSTGRES_PASSWORD}
+            DB_NAME: ${POSTGRES_DB:-postgres}
+            DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
+            DB_ENC_KEY: supabaserealtime
+            API_JWT_SECRET: ${JWT_SECRET}
+            FLY_ALLOC_ID: fly123
+            FLY_APP_NAME: realtime
+            SECRET_KEY_BASE: UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa15BLrx8etQoXz3gZv1/u2oq
+            ERL_AFLAGS: -proto_dist inet_tcp
+            ENABLE_TAILSCALE: "false"
+            DNS_NODES: "''"
+          depends_on:
+            db:
+              condition: service_healthy
+
+        # ─── Storage ────────────────────────────────────────────────────────
+        storage:
+          image: supabase/storage-api:v1.22.5
+          restart: unless-stopped
+          env_file: .env
+          environment:
+            ANON_KEY: ${ANON_KEY}
+            SERVICE_KEY: ${SERVICE_ROLE_KEY}
+            POSTGREST_URL: http://rest:3000
+            PGRST_JWT_SECRET: ${JWT_SECRET}
+            DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+            FILE_SIZE_LIMIT: "52428800"
+            STORAGE_BACKEND: file
+            FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+            TENANT_ID: stub
+            REGION: stub
+            GLOBAL_S3_BUCKET: stub
+            ENABLE_IMAGE_TRANSFORMATION: "true"
+            IMGPROXY_URL: http://imgproxy:8080
+          volumes:
+            - storage-data:/var/lib/storage
+          depends_on:
+            db:
+              condition: service_healthy
+            rest:
+              condition: service_started
+
+        # ─── Image Proxy ────────────────────────────────────────────────────
+        imgproxy:
+          image: darthsim/imgproxy:v3.8.0
+          restart: unless-stopped
+          environment:
+            IMGPROXY_BIND: ":8080"
+            IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
+            IMGPROXY_USE_ETAG: "true"
+            IMGPROXY_ENABLE_WEBP_DETECTION: ${IMGPROXY_ENABLE_WEBP_DETECTION:-true}
+          volumes:
+            - storage-data:/var/lib/storage:ro
+          healthcheck:
+            test: ["CMD", "imgproxy", "health"]
+            interval: 10s
+            timeout: 5s
+            retries: 3
+
+        # ─── Meta (Postgres metadata API) ───────────────────────────────────
+        meta:
+          image: supabase/postgres-meta:v0.84.2
+          restart: unless-stopped
+          env_file: .env
+          environment:
+            PG_META_PORT: "8080"
+            PG_META_DB_HOST: db
+            PG_META_DB_PORT: "5432"
+            PG_META_DB_NAME: ${POSTGRES_DB:-postgres}
+            PG_META_DB_USER: supabase
+            PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+          depends_on:
+            db:
+              condition: service_healthy
+
+        # ─── Studio (Dashboard UI) ──────────────────────────────────────────
+        studio:
+          image: supabase/studio:20250317-6955350
+          restart: unless-stopped
+          env_file: .env
+          environment:
+            STUDIO_PG_META_URL: http://meta:8080
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION:-Default Organization}
+            DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT:-Default Project}
+            SUPABASE_URL: http://kong:8000
+            SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
+            SUPABASE_ANON_KEY: ${ANON_KEY}
+            SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+            AUTH_JWT_SECRET: ${JWT_SECRET}
+            LOGFLARE_API_KEY: ${LOGFLARE_API_KEY:-}
+            LOGFLARE_URL: http://analytics:4000
+            NEXT_PUBLIC_ENABLE_LOGS: "true"
+            NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
+          ports:
+            - "${STUDIO_PORT:-3000}:3000"
+          depends_on:
+            db:
+              condition: service_healthy
+
+      volumes:
+        db-data:
+          name: constellation-db-data
+        db-config:
+          name: constellation-db-config
+        storage-data:
+          name: constellation-storage-data
+
   # ── load-secrets.sh ───────────────────────────────────────────────────────
   - path: /opt/scripts/load-secrets.sh
     permissions: "0750"
     owner: root:root
     content: |
       #!/usr/bin/env bash
-      # Pull Key Vault secrets for each Supabase project and write
-      # /opt/supabase-{project}/.env consumed by Docker Compose env_file.
+      # Pull Key Vault secrets for each Supabase project, write .env,
+      # generate Kong declarative config, and write URL config.
+      #
+      # Required env (from /etc/supabase-loader.conf):
+      #   KEYVAULT_NAME  — Azure Key Vault name (e.g. "kv-constellation")
+      #   PROJECTS       — space-separated list of project slugs
+      #   DNS_ZONE       — DNS zone for URL generation (e.g. "db.harebrained-apps.com")
       set -euo pipefail
 
       : "${KEYVAULT_NAME:?KEYVAULT_NAME must be set}"
       : "${PROJECTS:?PROJECTS must be set}"
+      : "${DNS_ZONE:?DNS_ZONE must be set}"
 
-      # Authenticate with the VM's user-assigned managed identity
+      echo "Authenticating with managed identity..."
       az login --identity --allow-no-subscriptions >/dev/null 2>&1
 
+      # Secrets to pull from Key Vault (suffix → env var name)
       declare -A SECRET_MAP=(
         [JWT_SECRET]=JWT_SECRET
         [ANON_KEY]=ANON_KEY
@@ -138,17 +413,24 @@ write_files:
         [SMTP_SENDER_NAME]=SMTP_SENDER_NAME
       )
 
+      # Critical secrets that MUST exist — fail hard if missing
+      CRITICAL_SECRETS=(JWT_SECRET ANON_KEY SERVICE_ROLE_KEY POSTGRES_PASSWORD)
+
       for project in $PROJECTS; do
         project_upper="${project^^}"
         env_dir="/opt/supabase-${project}"
         env_file="${env_dir}/.env"
+        kong_dir="${env_dir}/volumes/api"
 
-        mkdir -p "$env_dir"
+        mkdir -p "$env_dir" "$kong_dir"
         tmp_file=$(mktemp "${env_dir}/.env.XXXXXX")
         chmod 600 "$tmp_file"
 
         echo "# Auto-generated by load-secrets.sh — do not edit" > "$tmp_file"
         echo "# Generated at: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$tmp_file"
+
+        # Track values needed for kong.yml generation
+        declare -A fetched_values=()
 
         for secret_suffix in "${!SECRET_MAP[@]}"; do
           kv_secret_name="${project_upper}-${secret_suffix//_/-}"
@@ -164,10 +446,181 @@ write_files:
           }
 
           printf '%s=%s\n' "$env_var_name" "$secret_value" >> "$tmp_file"
+          fetched_values["$secret_suffix"]="$secret_value"
         done
+
+        # Validate critical secrets exist
+        missing=()
+        for cs in "${CRITICAL_SECRETS[@]}"; do
+          if [[ -z "${fetched_values[$cs]:-}" ]]; then
+            missing+=("$cs")
+          fi
+        done
+        if [[ ${#missing[@]} -gt 0 ]]; then
+          echo "FATAL: missing critical secrets: ${missing[*]}" >&2
+          rm -f "$tmp_file"
+          exit 1
+        fi
+
+        # Write URL config (derived from project name + DNS zone)
+        project_url="https://${project}.${DNS_ZONE}"
+        printf 'API_EXTERNAL_URL=%s\n' "$project_url" >> "$tmp_file"
+        printf 'SITE_URL=%s\n' "$project_url" >> "$tmp_file"
+        printf 'SUPABASE_PUBLIC_URL=%s\n' "$project_url" >> "$tmp_file"
 
         mv "$tmp_file" "$env_file"
         echo "Wrote ${env_file}"
+
+        # Generate Kong declarative config with actual API keys
+        anon_key="${fetched_values[ANON_KEY]}"
+        service_key="${fetched_values[SERVICE_ROLE_KEY]}"
+        kong_file="${kong_dir}/kong.yml"
+
+        cat > "$kong_file" <<KONG_EOF
+      _format_version: "1.1"
+
+      consumers:
+        - username: DASHBOARD
+        - username: anon
+          keyauth_credentials:
+            - key: ${anon_key}
+        - username: service_role
+          keyauth_credentials:
+            - key: ${service_key}
+
+      acls:
+        - consumer: anon
+          group: anon
+        - consumer: service_role
+          group: admin
+
+      services:
+        - name: auth-v1-open
+          url: http://auth:9999/verify
+          routes:
+            - name: auth-v1-open
+              strip_path: true
+              paths:
+                - /auth/v1/verify
+          plugins:
+            - name: cors
+
+        - name: auth-v1-open-callback
+          url: http://auth:9999/callback
+          routes:
+            - name: auth-v1-open-callback
+              strip_path: true
+              paths:
+                - /auth/v1/callback
+          plugins:
+            - name: cors
+
+        - name: auth-v1-open-authorize
+          url: http://auth:9999/authorize
+          routes:
+            - name: auth-v1-open-authorize
+              strip_path: true
+              paths:
+                - /auth/v1/authorize
+          plugins:
+            - name: cors
+
+        - name: auth-v1
+          url: http://auth:9999/
+          routes:
+            - name: auth-v1
+              strip_path: true
+              paths:
+                - /auth/v1/
+          plugins:
+            - name: key-auth
+              config:
+                hide_credentials: false
+            - name: acl
+              config:
+                hide_groups_header: true
+                allow:
+                  - admin
+                  - anon
+            - name: cors
+
+        - name: rest-v1
+          url: http://rest:3000/
+          routes:
+            - name: rest-v1
+              strip_path: true
+              paths:
+                - /rest/v1/
+          plugins:
+            - name: key-auth
+              config:
+                hide_credentials: false
+            - name: acl
+              config:
+                hide_groups_header: true
+                allow:
+                  - admin
+                  - anon
+            - name: cors
+
+        - name: realtime-v1
+          url: http://realtime:4000/socket/
+          routes:
+            - name: realtime-v1
+              strip_path: true
+              paths:
+                - /realtime/v1/
+          plugins:
+            - name: key-auth
+              config:
+                hide_credentials: false
+            - name: acl
+              config:
+                hide_groups_header: true
+                allow:
+                  - admin
+                  - anon
+            - name: cors
+
+        - name: storage-v1
+          url: http://storage:5000/
+          routes:
+            - name: storage-v1
+              strip_path: true
+              paths:
+                - /storage/v1/
+          plugins:
+            - name: key-auth
+              config:
+                hide_credentials: false
+            - name: acl
+              config:
+                hide_groups_header: true
+                allow:
+                  - admin
+                  - anon
+            - name: cors
+
+        - name: meta
+          url: http://meta:8080/
+          routes:
+            - name: meta
+              strip_path: true
+              paths:
+                - /pg/
+          plugins:
+            - name: key-auth
+              config:
+                hide_credentials: false
+            - name: acl
+              config:
+                hide_groups_header: true
+                allow:
+                  - admin
+      KONG_EOF
+
+        chmod 600 "$kong_file"
+        echo "Wrote ${kong_file}"
       done
 
       # Shared secret: RESEND_API_KEY
@@ -208,6 +661,9 @@ write_files:
         [[ -f "$CONF_FILE" ]] && source "$CONF_FILE"
       fi
       [[ -z "${STORAGE_ACCOUNT:-}" ]] && { echo "ERROR: STORAGE_ACCOUNT not set" >&2; exit 1; }
+
+      # Authenticate with managed identity for blob upload
+      az login --identity --allow-no-subscriptions >/dev/null 2>&1
 
       log() { echo "[supabase-backup] $(date -u +%H:%M:%S) $*"; }
       err() { echo "[supabase-backup] ERROR: $*" >&2; }
@@ -254,7 +710,7 @@ write_files:
 runcmd:
   # ── 1. Docker CE ──────────────────────────────────────────────────────────
   - |
-    if ! command -v docker &>/dev/null; then
+    if ! command -v docker >/dev/null 2>&1; then
       install -m 0755 -d /etc/apt/keyrings
       curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
         | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -270,13 +726,13 @@ runcmd:
 
   # ── 2. Azure CLI ──────────────────────────────────────────────────────────
   - |
-    if ! command -v az &>/dev/null; then
+    if ! command -v az >/dev/null 2>&1; then
       curl -sL https://aka.ms/InstallAzureCLIDeb | bash
     fi
 
   # ── 3. Caddy ──────────────────────────────────────────────────────────────
   - |
-    if ! command -v caddy &>/dev/null; then
+    if ! command -v caddy >/dev/null 2>&1; then
       curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key \
         | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
       curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt \
@@ -293,7 +749,7 @@ runcmd:
 
   # ── 4. New Relic Infrastructure Agent ─────────────────────────────────────
   - |
-    if ! command -v newrelic-infra &>/dev/null; then
+    if ! command -v newrelic-infra >/dev/null 2>&1; then
       curl -s https://download.newrelic.com/infrastructure_agent/gpg/newrelic-infra.gpg \
         | gpg --dearmor -o /etc/apt/trusted.gpg.d/newrelic-infra.gpg
       printf "deb https://download.newrelic.com/infrastructure_agent/linux/apt %s main\n" \
@@ -305,17 +761,22 @@ runcmd:
   - systemctl disable newrelic-infra || true
 
   # ── 5. Directory structure ─────────────────────────────────────────────────
-  - mkdir -p /opt/supabase-constellation
+  - mkdir -p /opt/supabase-constellation/volumes/api
   - mkdir -p /opt/scripts
   - chmod 750 /opt/supabase-constellation
   - chmod 755 /opt/scripts
 
-  # ── 6. Enable and start systemd units ──────────────────────────────────────
+  # ── 6. Enable and start services ──────────────────────────────────────────
   - systemctl daemon-reload
   - systemctl enable --now supabase-secret-loader.service
+  - systemctl enable --now supabase-stack.service
   - systemctl enable --now supabase-backup.timer
 
 final_message: |
-  cloud-init complete. Docker, Azure CLI, Caddy, and New Relic infra agent are installed.
-  supabase-secret-loader has loaded secrets from Key Vault.
-  Next: deploy docker-compose.yml to /opt/supabase-constellation/ and run docker compose up -d.
+  cloud-init complete. All services installed and started.
+  - Docker, Azure CLI, Caddy, New Relic infra agent installed
+  - Secrets loaded from Key Vault to /opt/supabase-constellation/.env
+  - Kong config generated with API keys at /opt/supabase-constellation/volumes/api/kong.yml
+  - Supabase stack started via docker compose
+  - Backup timer enabled (daily at 02:00 UTC)
+  Verify: sudo docker compose -f /opt/supabase-constellation/docker-compose.yml ps
