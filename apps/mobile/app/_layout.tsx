@@ -14,6 +14,8 @@ initSupabase(
   { auth: { storage: secureStoreAdapter, autoRefreshToken: true, persistSession: true } }
 );
 
+const appEnv = __DEV__ ? "development" : "production";
+
 if (process.env.EXPO_PUBLIC_NEW_RELIC_APP_TOKEN) {
   NewRelic.startAgent(process.env.EXPO_PUBLIC_NEW_RELIC_APP_TOKEN, {
     analyticsEventEnabled: true,
@@ -21,6 +23,7 @@ if (process.env.EXPO_PUBLIC_NEW_RELIC_APP_TOKEN) {
     networkRequestEnabled: true,
     networkErrorRequestEnabled: true,
   });
+  NewRelic.setAttribute("environment", appEnv);
 }
 
 function AuthGuard() {
@@ -52,8 +55,13 @@ export default function RootLayout() {
   return (
     <PostHogProvider
       apiKey={process.env.EXPO_PUBLIC_POSTHOG_KEY ?? ""}
-      options={{ host: process.env.EXPO_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com" }}
+      options={{
+        host: process.env.EXPO_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com",
+        defaultOptIn: true,
+        sendFeatureFlagEvent: true,
+      }}
       autocapture
+      onReady={(client) => client.register({ environment: appEnv })}
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <StatusBar style="light" />

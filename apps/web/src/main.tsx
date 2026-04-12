@@ -13,6 +13,8 @@ import "./index.css";
 (window as unknown as Record<string, unknown>).AFRAME =
   (window as unknown as Record<string, unknown>).AFRAME ?? {};
 
+const appEnv = import.meta.env.PROD ? "production" : "development";
+
 if (import.meta.env.VITE_NEW_RELIC_APP_ID && import.meta.env.VITE_NEW_RELIC_LICENSE_KEY) {
   new BrowserAgent({
     init: { distributed_tracing: { enabled: true }, privacy: { cookies_enabled: true } },
@@ -26,6 +28,10 @@ if (import.meta.env.VITE_POSTHOG_KEY) {
     api_host: import.meta.env.VITE_POSTHOG_HOST ?? "https://app.posthog.com",
     autocapture: true,
     session_recording: { maskAllInputs: true },
+    bootstrap: { distinctID: undefined },
+    loaded: (ph) => {
+      ph.register({ environment: appEnv });
+    },
   });
 }
 
