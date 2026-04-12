@@ -98,6 +98,75 @@ resource "azurerm_key_vault_secret" "constellation_service_role_key" {
 }
 
 # ---------------------------------------------------------------------------
+# SMTP secrets (Resend)
+# ---------------------------------------------------------------------------
+
+resource "azurerm_key_vault_secret" "constellation_smtp_host" {
+  name         = "CONSTELLATION-SMTP-HOST"
+  value        = "smtp.resend.com"
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
+}
+
+resource "azurerm_key_vault_secret" "constellation_smtp_port" {
+  name         = "CONSTELLATION-SMTP-PORT"
+  value        = "465"
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
+}
+
+resource "azurerm_key_vault_secret" "constellation_smtp_user" {
+  name         = "CONSTELLATION-SMTP-USER"
+  value        = "resend"
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
+}
+
+resource "azurerm_key_vault_secret" "constellation_smtp_pass" {
+  name         = "CONSTELLATION-SMTP-PASS"
+  value        = var.resend_api_key
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
+}
+
+resource "azurerm_key_vault_secret" "constellation_smtp_sender_name" {
+  name         = "CONSTELLATION-SMTP-SENDER-NAME"
+  value        = "Constellation"
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
+}
+
+# ---------------------------------------------------------------------------
+# Dashboard credentials
+# ---------------------------------------------------------------------------
+
+resource "random_password" "dashboard" {
+  length  = 32
+  special = true
+}
+
+resource "azurerm_key_vault_secret" "constellation_dashboard_username" {
+  name         = "CONSTELLATION-DASHBOARD-USERNAME"
+  value        = "supabase"
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
+}
+
+resource "azurerm_key_vault_secret" "constellation_dashboard_password" {
+  name         = "CONSTELLATION-DASHBOARD-PASSWORD"
+  value        = random_password.dashboard.result
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
+}
+
+# ---------------------------------------------------------------------------
 # Shared secrets
 # ---------------------------------------------------------------------------
 
