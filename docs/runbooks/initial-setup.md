@@ -362,20 +362,15 @@ Trigger a manual redeploy after saving.
 
 ### `.env.local` (local dev)
 
-Uncomment the self-hosted block and fill in:
-```bash
-VITE_SUPABASE_URL=https://constellation.db.harebrained-apps.com
-VITE_SUPABASE_PUBLISHABLE_KEY=<anon key>
-EXPO_PUBLIC_SUPABASE_URL=https://constellation.db.harebrained-apps.com
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<anon key>
+Local dev uses the Supabase CLI (`supabase start`) — **do not** point `.env.local` at the self-hosted instance. Copy `.env.local.example` and fill in the keys from `supabase status`:
 
-VITE_NEW_RELIC_ACCOUNT_ID=
-VITE_NEW_RELIC_APP_ID=
-VITE_NEW_RELIC_LICENSE_KEY=
-VITE_POSTHOG_KEY=
-EXPO_PUBLIC_NEW_RELIC_APP_TOKEN=
-EXPO_PUBLIC_POSTHOG_KEY=
+```bash
+cp .env.local.example .env.local
+supabase start
+supabase status  # copy anon key and service_role key
 ```
+
+Observability keys are optional for local dev — leave them blank or fill in if you want local telemetry.
 
 ---
 
