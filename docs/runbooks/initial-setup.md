@@ -238,10 +238,10 @@ sudo systemctl status caddy
 
 # Check secret loader ran and wrote the .env file
 sudo systemctl status supabase-secret-loader
-ls /opt/supabase/constellation/.env
+ls /opt/supabase-constellation/.env
 
 # Start Constellation's Supabase stack
-cd /opt/supabase/constellation
+cd /opt/supabase-constellation
 sudo docker compose up -d
 
 # Wait ~30 seconds, then verify all containers are healthy
