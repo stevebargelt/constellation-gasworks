@@ -301,14 +301,27 @@ These replace the empty values that were previously (incorrectly) hardcoded in `
 
 ## Step 8 — Apply database migrations (~5 min)
 
-From your local machine:
+Postgres is not exposed to the internet (no NSG rule for port 5432). Use an SSH tunnel to connect securely from your local machine:
 
 ```bash
+# Terminal 1 — open the SSH tunnel (leave running)
+ssh -i ~/.ssh/id_rsa_azure -L 5432:localhost:5432 azureuser@<vm_public_ip> -N
+
+# Terminal 2 — push migrations through the tunnel
 supabase db push \
-  --db-url "postgresql://postgres:<POSTGRES_PASSWORD>@constellation.db.harebrained-apps.com:5432/postgres"
+  --db-url "postgresql://postgres:<POSTGRES_PASSWORD>@localhost:5432/postgres"
 ```
 
-Should report 11 migrations applied successfully.
+Should report migrations applied successfully. After migrations complete, the auth, REST, realtime, and storage containers will automatically recover on their next restart cycle (they retry on failure).
+
+To verify all containers are healthy after migrations:
+
+```bash
+ssh -i ~/.ssh/id_rsa_azure azureuser@<vm_public_ip>
+sudo docker compose -f /opt/supabase-constellation/docker-compose.yml ps
+```
+
+> **Note**: If containers are still restarting after a few minutes, restart the stack to pick up the new database roles immediately: `sudo docker compose -f /opt/supabase-constellation/docker-compose.yml restart`
 
 ---
 
