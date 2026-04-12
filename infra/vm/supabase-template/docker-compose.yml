@@ -35,6 +35,8 @@ services:
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       JWT_SECRET: ${JWT_SECRET}
       POSTGRES_HOST: /var/run/postgresql
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
       - db-config:/etc/postgresql-custom
