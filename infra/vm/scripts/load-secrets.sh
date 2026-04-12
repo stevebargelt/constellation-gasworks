@@ -30,6 +30,9 @@ set -euo pipefail
 : "${KEYVAULT_NAME:?KEYVAULT_NAME must be set}"
 : "${PROJECTS:?PROJECTS must be set}"
 
+# Authenticate with the VM's user-assigned managed identity
+az login --identity --allow-no-subscriptions >/dev/null 2>&1
+
 # Mapping from Key Vault secret suffix to Docker Compose env var name
 declare -A SECRET_MAP=(
   [JWT_SECRET]=JWT_SECRET
