@@ -226,19 +226,31 @@ dig constellation.db.harebrained-apps.com
 
 ## Step 7 — Verify VM and start Constellation Supabase (~10 min)
 
+Cloud-init runs automatically on first boot and handles:
+- Installing Docker CE, Azure CLI, Caddy, New Relic Infrastructure Agent
+- Deploying `load-secrets.sh` and `backup.sh` to `/opt/scripts/`
+- Writing the real Caddyfile (reverse proxy to Kong + Studio)
+- Creating the `caddy` system user and starting Caddy
+- Starting `supabase-secret-loader` (pulls secrets from Key Vault → `/opt/supabase-constellation/.env`)
+- Enabling the daily backup timer
+
+SSH in and verify everything completed:
+
 ```bash
 ssh -i ~/.ssh/id_rsa_azure azureuser@<vm_public_ip>
 
-# Verify cloud-init completed
+# Verify cloud-init completed (may take 5–10 min on first boot)
 sudo cloud-init status
 # Expected: status: done
 
-# Check Caddy is running
+# Verify services are running
 sudo systemctl status caddy
-
-# Check secret loader ran and wrote the .env file
 sudo systemctl status supabase-secret-loader
-ls /opt/supabase-constellation/.env
+# Expected: caddy active (running), secret-loader active (exited) with RemainAfterExit=yes
+
+# Verify secrets were loaded
+cat /opt/supabase-constellation/.env
+# Should contain JWT_SECRET, ANON_KEY, SERVICE_ROLE_KEY, POSTGRES_PASSWORD, etc.
 
 # Start Constellation's Supabase stack
 cd /opt/supabase-constellation
@@ -249,6 +261,8 @@ sudo docker compose ps
 ```
 
 All containers should show `healthy` or `running`. Caddy will automatically obtain a TLS certificate for `constellation.db.harebrained-apps.com` on first request — this requires DNS propagation from Step 6 to be complete.
+
+> **Troubleshooting**: If `cloud-init status` shows `error`, check `sudo cloud-init status --long` and `sudo journalctl -u cloud-init -n 50` for details. Common issues: Caddy user not created (status=217/USER — fixed in cloud-init but check `id caddy`), Key Vault access denied (verify VM managed identity has Key Vault Secrets User role).
 
 ---
 
