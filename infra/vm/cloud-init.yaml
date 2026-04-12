@@ -307,14 +307,12 @@ runcmd:
   - chmod 750 /opt/supabase-constellation
   - chmod 755 /opt/scripts
 
-  # ── 6. Enable systemd units ───────────────────────────────────────────────
+  # ── 6. Enable and start systemd units ──────────────────────────────────────
   - systemctl daemon-reload
-  - systemctl enable supabase-secret-loader.service
-  - systemctl enable supabase-backup.timer
-  - systemctl start supabase-backup.timer
+  - systemctl enable --now supabase-secret-loader.service
+  - systemctl enable --now supabase-backup.timer
 
 final_message: |
   cloud-init complete. Docker, Azure CLI, Caddy, and New Relic infra agent are installed.
-  supabase-secret-loader.service and supabase-backup.timer are enabled.
-  Run 'systemctl start supabase-secret-loader' once Key Vault is provisioned
-  to populate /opt/supabase-constellation/.env, then start supabase containers.
+  supabase-secret-loader has loaded secrets from Key Vault.
+  Next: deploy docker-compose.yml to /opt/supabase-constellation/ and run docker compose up -d.
