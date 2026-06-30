@@ -31,3 +31,6 @@ jobs:
 
       - name: Run caddy cert-dir guard tests
         run: bash infra/vm/scripts/tests/test-caddy-cert-dir.sh
+
+      - name: Run Supabase data-dirs guard tests
+        run: bash infra/vm/scripts/tests/test-supabase-data-dirs.sh

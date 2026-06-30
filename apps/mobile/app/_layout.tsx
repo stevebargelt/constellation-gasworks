@@ -43,6 +43,10 @@ function AuthGuard() {
   }, [user, loading, segments]);
 
   useEffect(() => {
+    posthog?.register({ environment: appEnv });
+  }, []);
+
+  useEffect(() => {
     if (user) {
       posthog?.identify(user.id, user.email ? { email: user.email } : {});
     }
@@ -61,7 +65,6 @@ export default function RootLayout() {
         sendFeatureFlagEvent: true,
       }}
       autocapture
-      onReady={(client) => client.register({ environment: appEnv })}
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
         <StatusBar style="light" />

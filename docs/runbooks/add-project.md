@@ -67,12 +67,28 @@ PROJECTS="constellation <new-project-name>"
 
 ---
 
-## Step 3 — Copy Docker Compose Template
+## Step 3 — Create Persistent Data Directories on the Data Disk
+
+The managed data disk at `/mnt/data` is the persistence layer for all Supabase data. Before starting any new project, create its directory tree on the data disk:
+
+```bash
+PROJECT=<new-project-name>
+
+sudo mkdir -p /mnt/data/supabase-${PROJECT}/db
+sudo mkdir -p /mnt/data/supabase-${PROJECT}/db-config
+sudo mkdir -p /mnt/data/supabase-${PROJECT}/storage
+sudo chmod 755 /mnt/data/supabase-${PROJECT}/{db,db-config,storage}
+```
+
+If `/mnt/data` is not mounted, attach the managed disk first (VM → Disks in the Azure portal, LUN 10) and run `sudo mount -a`.
+
+---
+
+## Step 4 — Copy Docker Compose Template
 
 Still on the VM:
 
 ```bash
-PROJECT=<new-project-name>
 N=<project-index>          # e.g. 1 for second project
 KONG_PORT="8${N}00"        # e.g. 8100
 STUDIO_PORT="3${N}00"      # e.g. 3100
@@ -80,6 +96,35 @@ STUDIO_PORT="3${N}00"      # e.g. 3100
 sudo mkdir -p /opt/supabase-${PROJECT}
 sudo cp -r /opt/supabase-template/* /opt/supabase-${PROJECT}/
 ```
+
+After copying, update the `volumes:` section at the bottom of `/opt/supabase-${PROJECT}/docker-compose.yml` to bind-mount the directories created in Step 3:
+
+```yaml
+volumes:
+  db-data:
+    name: ${PROJECT}-db-data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/data/supabase-${PROJECT}/db
+  db-config:
+    name: ${PROJECT}-db-config
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/data/supabase-${PROJECT}/db-config
+  storage-data:
+    name: ${PROJECT}-storage-data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/data/supabase-${PROJECT}/storage
+```
+
+This ensures Postgres data, custom config, and uploaded files survive VM recreation — the same pattern used by the `constellation` project.
 
 Create the `.env` stub (will be overwritten by secret loader, but needs to exist):
 
@@ -96,7 +141,7 @@ EOF
 
 ---
 
-## Step 4 — Run the Secret Loader
+## Step 5 — Run the Secret Loader
 
 Restart the secret loader to pull the new project's secrets from Key Vault:
 
@@ -108,7 +153,7 @@ sudo cat /opt/supabase-${PROJECT}/.env | grep -v PASSWORD | grep -v SECRET | gre
 
 ---
 
-## Step 5 — Start the Project
+## Step 6 — Start the Project
 
 ```bash
 cd /opt/supabase-${PROJECT}
@@ -122,7 +167,7 @@ Wait ~30 seconds for Postgres to initialize, then check all services show `Up`.
 
 ---
 
-## Step 6 — Add Caddy Reverse Proxy Blocks
+## Step 7 — Add Caddy Reverse Proxy Blocks
 
 ```bash
 sudo nano /etc/caddy/Caddyfile
@@ -155,7 +200,7 @@ curl -I https://<new-project-name>.db.harebrained-apps.com/health
 
 ---
 
-## Step 7 — Add to Backup Rotation
+## Step 8 — Add to Backup Rotation
 
 ```bash
 sudo nano /opt/scripts/backup.sh
@@ -176,7 +221,7 @@ sudo journalctl -u supabase-backup.service --no-pager | tail -20
 
 ---
 
-## Step 8 — Apply Supabase Migrations
+## Step 9 — Apply Supabase Migrations
 
 From your local machine with the Supabase CLI:
 
