@@ -418,13 +418,16 @@ write_files:
       )
 
       # Critical secrets that MUST exist — fail hard if missing
-      CRITICAL_SECRETS=(JWT_SECRET ANON_KEY SERVICE_ROLE_KEY POSTGRES_PASSWORD)
+      CRITICAL_SECRETS=(JWT_SECRET ANON_KEY SERVICE_ROLE_KEY POSTGRES_PASSWORD SMTP_HOST SMTP_PASS DASHBOARD_PASSWORD)
 
+      port_index=0
       for project in $PROJECTS; do
         project_upper="${project^^}"
         env_dir="/opt/supabase-${project}"
         env_file="${env_dir}/.env"
         kong_dir="${env_dir}/volumes/api"
+
+        db_port=$((5432 + port_index))
 
         mkdir -p "$env_dir" "$kong_dir"
         tmp_file=$(mktemp "${env_dir}/.env.XXXXXX")
@@ -471,6 +474,7 @@ write_files:
         printf 'API_EXTERNAL_URL=%s\n' "$project_url" >> "$tmp_file"
         printf 'SITE_URL=%s\n' "$project_url" >> "$tmp_file"
         printf 'SUPABASE_PUBLIC_URL=%s\n' "$project_url" >> "$tmp_file"
+        printf 'DB_PORT=%s\n' "$db_port" >> "$tmp_file"
 
         mv "$tmp_file" "$env_file"
         echo "Wrote ${env_file}"
@@ -625,6 +629,7 @@ write_files:
 
         chmod 644 "$kong_file"
         echo "Wrote ${kong_file}"
+        port_index=$((port_index + 1))
       done
 
       # Shared secret: RESEND_API_KEY
@@ -699,8 +704,11 @@ write_files:
         [[ -z "$postgres_password" ]] && { err "POSTGRES_PASSWORD not found in $env_file"; return 1; }
 
         local db_port=""
-        db_port="$(grep -E '^DB_PORT=' "$env_file" | cut -d= -f2- | tr -d '"' | tr -d "'" || echo "")"
-        db_port="${db_port:-5432}"
+        db_port="$(grep -E '^DB_PORT=' "$env_file" | cut -d= -f2- | tr -d '"' | tr -d "'" || true)"
+        if [[ -z "$db_port" ]]; then
+          err "DB_PORT not found in $env_file — a second project on a different port would silently back up against the wrong database"
+          return 1
+        fi
 
         PGPASSWORD="$postgres_password" pg_dump \
           --host=127.0.0.1 --port="$db_port" --username=postgres \

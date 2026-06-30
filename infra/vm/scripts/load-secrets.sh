@@ -52,13 +52,16 @@ declare -A SECRET_MAP=(
 )
 
 # Critical secrets that MUST exist — fail hard if missing
-CRITICAL_SECRETS=(JWT_SECRET ANON_KEY SERVICE_ROLE_KEY POSTGRES_PASSWORD)
+CRITICAL_SECRETS=(JWT_SECRET ANON_KEY SERVICE_ROLE_KEY POSTGRES_PASSWORD SMTP_HOST SMTP_PASS DASHBOARD_PASSWORD)
 
+port_index=0
 for project in $PROJECTS; do
   project_upper="${project^^}"
   env_dir="/opt/supabase-${project}"
   env_file="${env_dir}/.env"
   kong_dir="${env_dir}/volumes/api"
+
+  db_port=$((5432 + port_index))
 
   mkdir -p "$env_dir" "$kong_dir"
   # Write atomically: build to a temp file then move
@@ -106,6 +109,7 @@ for project in $PROJECTS; do
   printf 'API_EXTERNAL_URL=%s\n' "$project_url" >> "$tmp_file"
   printf 'SITE_URL=%s\n' "$project_url" >> "$tmp_file"
   printf 'SUPABASE_PUBLIC_URL=%s\n' "$project_url" >> "$tmp_file"
+  printf 'DB_PORT=%s\n' "$db_port" >> "$tmp_file"
 
   mv "$tmp_file" "$env_file"
   echo "Wrote ${env_file}"
@@ -260,6 +264,7 @@ KONG_EOF
 
   chmod 644 "$kong_file"
   echo "Wrote ${kong_file}"
+  port_index=$((port_index + 1))
 done
 
 # Shared secret: RESEND_API_KEY (written to /opt/supabase-shared/shared.env)

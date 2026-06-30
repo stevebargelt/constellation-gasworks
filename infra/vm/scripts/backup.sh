@@ -69,6 +69,8 @@ if [[ -z "${STORAGE_ACCOUNT:-}" ]]; then
   exit 1
 fi
 
+az login --identity --allow-no-subscriptions >/dev/null 2>&1
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -104,12 +106,12 @@ backup_project() {
     return 1
   fi
 
-  # Determine Postgres port — each project's postgres runs on a unique port.
-  # Convention: constellation=5432, proto-a=5433, proto-b=5434, etc.
-  # The port is written to the env file as DB_PORT by the secret loader.
   local db_port=""
-  db_port="$(grep -E '^DB_PORT=' "$env_file" | cut -d= -f2- | tr -d '"' | tr -d "'" || echo "")"
-  db_port="${db_port:-5432}"
+  db_port="$(grep -E '^DB_PORT=' "$env_file" | cut -d= -f2- | tr -d '"' | tr -d "'" || true)"
+  if [[ -z "$db_port" ]]; then
+    err "DB_PORT not found in $env_file — a second project on a different port would silently back up against the wrong database"
+    return 1
+  fi
 
   # Run pg_dump inside the project's postgres container
   log "Running pg_dump for $project on port $db_port..."

@@ -256,7 +256,7 @@ sudo systemctl status supabase-stack
 # Verify secrets were loaded and URLs are set
 cat /opt/supabase-constellation/.env
 # Should contain: JWT_SECRET, ANON_KEY, SERVICE_ROLE_KEY, POSTGRES_PASSWORD,
-#                 SMTP_HOST, SMTP_PASS, DASHBOARD_PASSWORD,
+#                 SMTP_HOST, SMTP_PASS, DASHBOARD_PASSWORD, DB_PORT,
 #                 API_EXTERNAL_URL, SITE_URL, SUPABASE_PUBLIC_URL
 
 # Verify Kong config was generated

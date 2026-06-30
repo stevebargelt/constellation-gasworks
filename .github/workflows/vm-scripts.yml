@@ -22,3 +22,9 @@ jobs:
 
       - name: Run newrelic-infra sed patch tests
         run: bash infra/vm/scripts/tests/test-newrelic-sed.sh
+
+      - name: Run backup DB_PORT fail-hard tests
+        run: bash infra/vm/scripts/tests/test-backup-db-port.sh
+
+      - name: Run critical-secrets validation tests
+        run: bash infra/vm/scripts/tests/test-critical-secrets.sh
