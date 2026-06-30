@@ -38,4 +38,4 @@ jobs:
 
       - name: EAS Build (preview)
         working-directory: apps/mobile
-        run: eas build --platform all --profile preview --non-interactive || echo "::warning::EAS preview build did not complete (non-blocking) — see FG-33 (Expo billing/iOS credentials)"
+        run: eas build --platform all --profile preview --non-interactive
