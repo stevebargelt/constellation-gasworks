@@ -278,4 +278,17 @@ resend_key=$(az keyvault secret show \
 mv "$shared_tmp" /opt/supabase-shared/shared.env
 echo "Wrote /opt/supabase-shared/shared.env"
 
+# New Relic Infrastructure Agent license key
+nr_license_key=$(az keyvault secret show \
+  --vault-name "$KEYVAULT_NAME" \
+  --name "NR-LICENSE-KEY" \
+  --query "value" \
+  --output tsv 2>/dev/null) || true
+if [ -n "${nr_license_key:-}" ]; then
+  sed -i "s/^license_key:.*$/license_key: ${nr_license_key}/" /etc/newrelic-infra.yml
+  systemctl enable newrelic-infra
+  systemctl restart newrelic-infra
+  echo "Updated New Relic license key and restarted newrelic-infra"
+fi
+
 echo "Secret loading complete."

@@ -32,3 +32,9 @@ variable "resend_api_key" {
   type        = string
   sensitive   = true
 }
+
+variable "nr_license_key" {
+  description = "New Relic ingest license key — same value as VITE_NEW_RELIC_LICENSE_KEY used by the browser agent"
+  type        = string
+  sensitive   = true
+}

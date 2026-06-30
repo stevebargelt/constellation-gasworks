@@ -177,3 +177,15 @@ resource "azurerm_key_vault_secret" "resend_api_key" {
 
   depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
 }
+
+# ---------------------------------------------------------------------------
+# New Relic
+# ---------------------------------------------------------------------------
+
+resource "azurerm_key_vault_secret" "nr_license_key" {
+  name         = "NR-LICENSE-KEY"
+  value        = var.nr_license_key
+  key_vault_id = azurerm_key_vault.main.id
+
+  depends_on = [azurerm_role_assignment.vm_keyvault_secrets_user, azurerm_role_assignment.deployer_keyvault_secrets_officer]
+}

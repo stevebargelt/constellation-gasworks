@@ -134,6 +134,7 @@ Secrets (masked in logs):
 | `TF_VAR_CONSTELLATION_ANON_KEY` | Anon JWT from Step 1 |
 | `TF_VAR_CONSTELLATION_SERVICE_ROLE_KEY` | Service role JWT from Step 1 |
 | `TF_VAR_RESEND_API_KEY` | From resend.com Settings → API Keys |
+| `TF_VAR_NR_LICENSE_KEY` | New Relic ingest license key — same value as `VITE_NEW_RELIC_LICENSE_KEY` set in Vercel (Step 9) |
 
 Required for deploy workflow (Vercel + EAS):
 

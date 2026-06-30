@@ -1,0 +1,24 @@
+name: VM Scripts
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/vm/**"
+      - ".github/workflows/vm-scripts.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/vm/**"
+      - ".github/workflows/vm-scripts.yml"
+
+jobs:
+  shell-tests:
+    name: Shell Script Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run newrelic-infra sed patch tests
+        run: bash infra/vm/scripts/tests/test-newrelic-sed.sh
