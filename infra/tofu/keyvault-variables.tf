@@ -37,4 +37,6 @@ variable "nr_license_key" {
   description = "New Relic ingest license key — same value as VITE_NEW_RELIC_LICENSE_KEY used by the browser agent"
   type        = string
   sensitive   = true
+  # Non-critical: load-secrets.sh guards on empty, so a missing secret never blocks apply.
+  default = ""
 }

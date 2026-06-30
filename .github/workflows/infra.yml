@@ -1,4 +1,16 @@
 name: Infrastructure (OpenTofu)
+# ============================================================
+# LIVE APPLY WARNING
+# A push to main that touches infra/tofu/** OR
+# .github/workflows/infra.yml triggers an immediate
+# 'tofu apply' against the PRODUCTION Azure subscription.
+# There is no manual approval gate beyond the PR review.
+#
+# DESTROY+RECREATE WARNING
+# main.tf sets custom_data = filebase64("../vm/cloud-init.yaml").
+# Any change to infra/vm/cloud-init.yaml — even whitespace —
+# forces a full VM destroy+recreate on the next apply.
+# ============================================================
 on:
   pull_request:
     branches: [main]
@@ -61,7 +73,7 @@ jobs:
 
       - name: OpenTofu Plan
         id: plan
-        run: set -o pipefail && tofu plan -no-color -out=tfplan 2>&1 | tee plan.txt
+        run: set -o pipefail && tofu plan -no-color -input=false -lock-timeout=120s -out=tfplan 2>&1 | tee plan.txt
         env:
           # Non-secret vars (override defaults or not in terraform.tfvars in CI — file is gitignored)
           TF_VAR_resource_group_name: constellation
@@ -144,7 +156,7 @@ jobs:
         run: tofu init
 
       - name: OpenTofu Apply
-        run: tofu apply -auto-approve
+        run: tofu apply -auto-approve -input=false -lock-timeout=120s
         env:
           # Non-secret vars (override defaults or not in terraform.tfvars in CI — file is gitignored)
           TF_VAR_resource_group_name: constellation
