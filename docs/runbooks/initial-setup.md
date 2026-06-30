@@ -284,6 +284,49 @@ All containers should show `healthy` or `running`. Caddy will automatically obta
 
 ---
 
+## Database and storage persistence across VM recreation
+
+The Postgres database and Supabase Storage files live on the 64 GB managed data disk at `/mnt/data/supabase-constellation/`:
+
+| Path on data disk | Contents |
+|---|---|
+| `/mnt/data/supabase-constellation/db` | Postgres data directory (`/var/lib/postgresql/data`) |
+| `/mnt/data/supabase-constellation/storage` | Supabase Storage uploaded files (`/var/lib/storage`) |
+| `/mnt/data/supabase-constellation/db-config` | Postgres custom config (`/etc/postgresql-custom`) |
+
+These are backed by Docker named volumes using the local bind driver, so Docker's volume management is preserved while bytes live on the persistent disk. When the OS disk is replaced (VM recreation), the managed disk reattaches and cloud-init re-establishes the volume bindings automatically — **no data loss**.
+
+**Fail-closed design**: a pre-start check (`/opt/scripts/check-supabase-data-dirs.sh`) runs before every Supabase stack start via `ExecStartPre=+` in `supabase-stack.service`. If `/mnt/data` is not mounted, the stack refuses to start and logs:
+
+```
+FATAL [check-supabase-data-dirs]: /mnt/data is not a mountpoint.
+FATAL [check-supabase-data-dirs]: Data disk may be detached or failed to mount.
+FATAL [check-supabase-data-dirs]: Supabase stack will NOT start — attach the disk, then: mount -a && systemctl start supabase-stack
+```
+
+This prevents Postgres from initializing against ephemeral OS-disk storage and silently recreating an empty database on VM recreation.
+
+**Fresh disk (first provisioning)**: the database starts empty. Database migrations must be applied after the stack is running — see Step 8 below. Supabase Storage also starts empty; any files uploaded by users before migration must be re-uploaded or restored from backup.
+
+**Recovery if the data disk is absent or detached:**
+
+1. Attach the managed data disk in the Azure portal (VM → Disks → Attach existing disk, LUN 10).
+2. SSH into the VM and mount it:
+   ```bash
+   sudo mount -a
+   ```
+3. Verify the mount:
+   ```bash
+   mountpoint /mnt/data && ls /mnt/data/supabase-constellation/
+   ```
+4. Start the Supabase stack:
+   ```bash
+   sudo systemctl start supabase-stack
+   sudo systemctl status supabase-stack
+   ```
+
+---
+
 ## TLS certificate persistence and the Caddy cert guard
 
 Caddy's TLS certificates are stored on the 64 GB managed data disk at `/mnt/data/caddy`, symlinked from `/var/lib/caddy/.local/share/caddy`. This survives VM recreation: when the OS disk is replaced, the data disk is reattached and the symlink is re-established by cloud-init.
