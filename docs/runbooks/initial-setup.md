@@ -337,21 +337,68 @@ These replace the empty values that were previously (incorrectly) hardcoded in `
 
 ## Step 8 — Apply database migrations (~5 min)
 
-Postgres is not exposed to the internet (no NSG rule for port 5432). Use an SSH tunnel to connect securely from your local machine:
+> **Security**: Postgres is bound to `127.0.0.1` on the VM and there is no NSG rule opening port 5432. The database is not internet-reachable — the SSH tunnel below is the only remote access path.
 
+**Get the VM IP** (if you no longer have it from Step 5):
 ```bash
-# Terminal 1 — open the SSH tunnel (leave running)
-ssh -i ~/.ssh/id_rsa_azure -L 5432:localhost:5432 azureuser@<vm_public_ip> -N
+cd infra/tofu
+tofu output vm_public_ip
+```
 
-# Terminal 2 — push migrations through the tunnel
+**Terminal 1 — open the SSH tunnel (leave running):**
+```bash
+ssh -i ~/.ssh/id_rsa_azure -L 5432:127.0.0.1:5432 azureuser@<vm_public_ip> -N
+```
+This forwards `localhost:5432` on your machine to the VM's loopback Postgres. Leave this terminal open for the steps below.
+
+**Terminal 2 — verify tunnel connectivity before pushing:**
+```bash
+pg_isready -h localhost -p 5432 -U postgres
+# Expected: localhost:5432 - accepting connections
+```
+
+If `pg_isready` is not installed, use psql:
+```bash
+psql "postgresql://postgres:<POSTGRES_PASSWORD>@localhost:5432/postgres" -c '\conninfo'
+```
+
+Do not proceed to `db push` until the tunnel is confirmed live.
+
+**Apply all 11 migrations:**
+```bash
 supabase db push \
   --db-url "postgresql://postgres:<POSTGRES_PASSWORD>@localhost:5432/postgres"
 ```
 
-Should report migrations applied successfully. After migrations complete, the auth, REST, realtime, and storage containers will automatically recover on their next restart cycle (they retry on failure).
+Should report all 11 migrations applied successfully.
 
-To verify all containers are healthy after migrations:
+**Post-migration sanity query — confirm core tables exist and RLS is enabled:**
+```bash
+psql "postgresql://postgres:<POSTGRES_PASSWORD>@localhost:5432/postgres" <<'SQL'
+SELECT relname AS table_name, relrowsecurity AS rls_enabled
+FROM   pg_class
+WHERE  relname IN ('relationships', 'calendar_events', 'tasks', 'recipes')
+  AND  relkind = 'r'
+ORDER  BY relname;
+SQL
+```
 
+Expected output:
+```
+   table_name    | rls_enabled
+-----------------+-------------
+ calendar_events | t
+ recipes         | t
+ relationships   | t
+ tasks           | t
+(4 rows)
+```
+
+If any row is missing or shows `f` for `rls_enabled`, do not proceed — check that `20260408000001_rls_policies.sql` applied without errors.
+
+After migrations complete, the auth, REST, realtime, and storage containers will automatically recover on their next restart cycle (they retry on failure).
+
+**Verify all containers are healthy:**
 ```bash
 ssh -i ~/.ssh/id_rsa_azure azureuser@<vm_public_ip>
 sudo docker compose -f /opt/supabase-constellation/docker-compose.yml ps
