@@ -938,14 +938,28 @@ runcmd:
   - systemctl enable --now supabase-backup.timer
 
   # ── 7. Post-start DB setup (runs after supabase-stack starts) ─────────────
-  # Create schemas needed by services (Supabase Postgres image doesn't always
-  # create these on first init depending on the version)
+  # Creates schemas and sets internal role passwords. The Supabase Postgres image
+  # creates supabase_auth_admin, supabase_storage_admin, authenticator, and
+  # supabase without passwords; services connecting via TCP fail scram-sha-256
+  # auth until their passwords match POSTGRES_PASSWORD. ALTER USER is idempotent.
+  # SQL is piped via stdin so the password never appears in shell args or logs.
   - |
+    _db_pw="$(grep '^POSTGRES_PASSWORD=' /opt/supabase-constellation/.env | cut -d= -f2-)"
+    if [ -z "$_db_pw" ]; then
+      echo "ERROR: POSTGRES_PASSWORD not found in .env — role passwords not set" >&2
+      exit 1
+    fi
+    _db_pw_sql="$(printf '%s' "$_db_pw" | sed "s/'/''/g")"
     for i in 1 2 3 4 5; do
-      docker exec constellation-db-1 psql -U supabase_admin -h 127.0.0.1 -d postgres \
-        -c "CREATE SCHEMA IF NOT EXISTS _realtime;" \
-        -c "CREATE SCHEMA IF NOT EXISTS _analytics;" \
-        && break
+      printf '%s\n' \
+        "CREATE SCHEMA IF NOT EXISTS _realtime;" \
+        "CREATE SCHEMA IF NOT EXISTS _analytics;" \
+        "ALTER USER supabase_auth_admin WITH PASSWORD '${_db_pw_sql}';" \
+        "ALTER USER supabase_storage_admin WITH PASSWORD '${_db_pw_sql}';" \
+        "ALTER USER authenticator WITH PASSWORD '${_db_pw_sql}';" \
+        "ALTER USER supabase WITH PASSWORD '${_db_pw_sql}';" \
+      | docker exec -i constellation-db-1 psql -U supabase_admin -h 127.0.0.1 -d postgres \
+      && break
       sleep 10
     done
 
