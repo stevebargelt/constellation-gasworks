@@ -30,14 +30,14 @@ module.exports = {
     },
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.constellation.app",
+      bundleIdentifier: "com.harebrainedapps.constellation",
     },
     android: {
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#030712",
       },
-      package: "com.constellation.app",
+      package: "com.harebrainedapps.constellation",
     },
     plugins: ["expo-router", "expo-secure-store"],
     experiments: {
