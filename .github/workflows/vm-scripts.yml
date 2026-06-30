@@ -34,3 +34,6 @@ jobs:
 
       - name: Run Supabase data-dirs guard tests
         run: bash infra/vm/scripts/tests/test-supabase-data-dirs.sh
+
+      - name: Run internal role password logic tests
+        run: bash infra/vm/scripts/tests/test-role-passwords.sh
