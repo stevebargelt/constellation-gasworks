@@ -733,6 +733,57 @@ write_files:
       done
       exit "$overall_exit"
 
+  # ── check-caddy-cert-dir.sh ───────────────────────────────────────────────
+  - path: /opt/scripts/check-caddy-cert-dir.sh
+    permissions: "0750"
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      # Pre-start guard for caddy.service: verifies the data disk is mounted and
+      # Caddy's cert directory exists with correct ownership. Called via
+      # ExecStartPre=+ in caddy.service.d/data-disk.conf, so it runs as root.
+      #
+      # Exits non-zero to block Caddy if /mnt/data is not mounted, preventing
+      # spurious ACME certificate requests that would burn the 5-cert/168h rate limit.
+      set -euo pipefail
+
+      MOUNT="${CADDY_CHECK_MOUNT:-/mnt/data}"
+      CERT_DIR="${MOUNT}/caddy"
+
+      if ! mountpoint -q "$MOUNT"; then
+        echo "FATAL [check-caddy-cert-dir]: $MOUNT is not a mountpoint." >&2
+        echo "FATAL [check-caddy-cert-dir]: Data disk may be detached or failed to mount." >&2
+        echo "FATAL [check-caddy-cert-dir]: Caddy will NOT start — attach the disk, then: mount -a && systemctl start caddy" >&2
+        exit 1
+      fi
+
+      if [ ! -d "$CERT_DIR" ]; then
+        echo "[check-caddy-cert-dir] $CERT_DIR missing — creating with caddy ownership." >&2
+        mkdir -p "$CERT_DIR"
+        chown caddy:caddy "$CERT_DIR"
+        chmod 750 "$CERT_DIR"
+      fi
+
+      owner=$(stat -c '%U' "$CERT_DIR" 2>/dev/null) || owner="(unknown)"
+      if [ "$owner" != "caddy" ]; then
+        echo "[check-caddy-cert-dir] WARNING: $CERT_DIR owned by '$owner', correcting to caddy." >&2
+        chown caddy:caddy "$CERT_DIR"
+      fi
+
+      echo "[check-caddy-cert-dir] OK: $CERT_DIR on mounted $MOUNT."
+
+  # ── Caddy systemd drop-in: pre-start cert-dir guard ───────────────────────
+  - path: /etc/systemd/system/caddy.service.d/data-disk.conf
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Service]
+      # Run as root (+) so the check can verify/fix ownership and log to the
+      # journal. Exits non-zero if /mnt/data is not mounted, which causes
+      # caddy.service to fail immediately rather than requesting fresh ACME certs
+      # against ephemeral storage and burning the 5-cert/168h rate limit.
+      ExecStartPre=+/opt/scripts/check-caddy-cert-dir.sh
+
 runcmd:
   # ── 0. Mount data disk (persists across VM recreations) ──────────────────
   # The 64 GB managed disk (LUN 10) stores Caddy certs, Docker volumes, etc.
@@ -748,6 +799,9 @@ runcmd:
       fi
       mount -a
       mkdir -p "$MOUNT/caddy"
+    else
+      echo "WARNING [cloud-init]: Data disk $DISK not found." >&2
+      echo "WARNING [cloud-init]: Caddy will be blocked from starting until disk is attached." >&2
     fi
 
   # ── 1. Docker CE ──────────────────────────────────────────────────────────
@@ -787,14 +841,18 @@ runcmd:
     id caddy >/dev/null 2>&1 || useradd --system --create-home \
       --home-dir /var/lib/caddy --shell /usr/sbin/nologin \
       --comment "Caddy web server" caddy
-  # Symlink Caddy data dir to persistent disk so TLS certs survive VM recreation
+  # Symlink Caddy cert dir to data disk. Re-run safe: ln -sfn is idempotent and
+  # existing certs on the data disk are preserved across VM recreation.
   - |
     if [ -d /mnt/data/caddy ]; then
       chown caddy:caddy /mnt/data/caddy
+      chmod 750 /mnt/data/caddy
       mkdir -p /var/lib/caddy/.local/share
       ln -sfn /mnt/data/caddy /var/lib/caddy/.local/share/caddy
       chown -h caddy:caddy /var/lib/caddy/.local /var/lib/caddy/.local/share
     fi
+  # daemon-reload before start so caddy.service.d/data-disk.conf pre-start guard is active
+  - systemctl daemon-reload
   - systemctl enable --now caddy
 
   # ── 4. New Relic Infrastructure Agent ─────────────────────────────────────

@@ -28,3 +28,6 @@ jobs:
 
       - name: Run critical-secrets validation tests
         run: bash infra/vm/scripts/tests/test-critical-secrets.sh
+
+      - name: Run caddy cert-dir guard tests
+        run: bash infra/vm/scripts/tests/test-caddy-cert-dir.sh

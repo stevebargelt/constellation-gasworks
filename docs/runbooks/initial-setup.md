@@ -269,7 +269,42 @@ sudo docker compose -f /opt/supabase-constellation/docker-compose.yml ps
 
 All containers should show `healthy` or `running`. Caddy will automatically obtain a TLS certificate for `constellation.db.harebrained-apps.com` on first request — this requires DNS propagation from Step 6 to be complete.
 
-> **Troubleshooting**: If `cloud-init status` shows `error`, check `sudo cloud-init status --long` and `sudo journalctl -u cloud-init -n 50` for details. If `supabase-secret-loader` failed, check `sudo journalctl -u supabase-secret-loader -n 50` — common causes: Key Vault access denied (verify VM managed identity has Key Vault Secrets User role), missing critical secrets in Key Vault.
+> **Troubleshooting**: If `cloud-init status` shows `error`, check `sudo cloud-init status --long` and `sudo journalctl -u cloud-init -n 50` for details. If `supabase-secret-loader` failed, check `sudo journalctl -u supabase-secret-loader -n 50` — common causes: Key Vault access denied (verify VM managed identity has Key Vault Secrets User role), missing critical secrets in Key Vault. If `caddy` failed, check `sudo journalctl -u caddy -n 50` — see the TLS cert guard section below.
+
+---
+
+## TLS certificate persistence and the Caddy cert guard
+
+Caddy's TLS certificates are stored on the 64 GB managed data disk at `/mnt/data/caddy`, symlinked from `/var/lib/caddy/.local/share/caddy`. This survives VM recreation: when the OS disk is replaced, the data disk is reattached and the symlink is re-established by cloud-init.
+
+**Fail-closed design**: a pre-start check (`/opt/scripts/check-caddy-cert-dir.sh`) runs before every Caddy start via `ExecStartPre=+` in `/etc/systemd/system/caddy.service.d/data-disk.conf`. If `/mnt/data` is not mounted, Caddy refuses to start and logs:
+
+```
+FATAL [check-caddy-cert-dir]: /mnt/data is not a mountpoint.
+FATAL [check-caddy-cert-dir]: Data disk may be detached or failed to mount.
+FATAL [check-caddy-cert-dir]: Caddy will NOT start — attach the disk, then: mount -a && systemctl start caddy
+```
+
+This prevents Caddy from requesting fresh certificates from Let's Encrypt every boot (rate-limited to 5 certificates per 168 hours per domain).
+
+**Recovery if the data disk is absent or detached:**
+
+1. Attach the managed data disk in the Azure portal (VM → Disks → Attach existing disk, LUN 10).
+2. SSH into the VM and mount it:
+   ```bash
+   sudo mount -a
+   ```
+3. Verify the mount:
+   ```bash
+   mountpoint /mnt/data && ls /mnt/data/caddy
+   ```
+4. Start Caddy:
+   ```bash
+   sudo systemctl start caddy
+   sudo systemctl status caddy
+   ```
+
+**Do not** delete `/mnt/data/caddy` or reformat the data disk. Doing so causes Caddy to request new certificates, which will fail if the rate limit is exhausted (check `sudo journalctl -u caddy | grep acme`). If rate-limited, wait up to 168 hours or use Let's Encrypt's staging endpoint to test.
 
 ---
 
