@@ -1,8 +1,12 @@
 const path = require("path");
 
-// Load .env.local from the monorepo root so EXPO_PUBLIC_* vars are available
-// when this config is evaluated. Expo's built-in env loader only looks in the
-// project directory (apps/mobile/), not the monorepo root.
+// Env sourcing for EXPO_PUBLIC_* vars:
+//   - Local dev: loaded from the monorepo root .env.local below. Expo's built-in
+//     env loader only looks in the project directory (apps/mobile/), not the
+//     monorepo root, so we load it explicitly here.
+//   - EAS cloud builds (preview/production): sourced from EAS-hosted environment
+//     variables (`eas env:list <profile>`), since .env.local is gitignored and is
+//     not uploaded to the build. These point at the self-hosted Supabase backend.
 try {
   require("dotenv").config({
     path: path.resolve(__dirname, "../../.env.local"),
