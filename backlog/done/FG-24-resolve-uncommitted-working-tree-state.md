@@ -1,9 +1,11 @@
 ---
 id: FG-24
 type: story
-status: active
+status: done
 title: Resolve uncommitted working-tree state
 created: 2026-06-30
+closed: 2026-06-30
+closed_commit: 075c3b2
 ---
 
 **Epic:** FG-5 (hygiene)
