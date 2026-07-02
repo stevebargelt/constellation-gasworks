@@ -385,6 +385,8 @@ eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value "https
 eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY --value "<anon key from Step 1>"
 ```
 
+Both vars are **required** — `initSupabase()` in `@constellation/api` throws a startup error naming any missing var. A mobile build with either secret absent will crash immediately on launch.
+
 These replace the empty values that were previously (incorrectly) hardcoded in `eas.json`.
 
 ---
@@ -486,14 +488,16 @@ https://constellation.db.harebrained-apps.com/auth/v1/callback
 
 Update environment variables for the **Production** environment:
 
-| Variable | Value |
-|---|---|
-| `VITE_SUPABASE_URL` | `https://constellation.db.harebrained-apps.com` |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | anon key from Step 1 |
-| `VITE_NEW_RELIC_ACCOUNT_ID` | from New Relic |
-| `VITE_NEW_RELIC_APP_ID` | from New Relic |
-| `VITE_NEW_RELIC_LICENSE_KEY` | from New Relic |
-| `VITE_POSTHOG_KEY` | from PostHog |
+| Variable | Value | Required |
+|---|---|---|
+| `VITE_SUPABASE_URL` | `https://constellation.db.harebrained-apps.com` | **yes** |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | anon key from Step 1 | **yes** |
+| `VITE_NEW_RELIC_ACCOUNT_ID` | from New Relic | no |
+| `VITE_NEW_RELIC_APP_ID` | from New Relic | no |
+| `VITE_NEW_RELIC_LICENSE_KEY` | from New Relic | no |
+| `VITE_POSTHOG_KEY` | from PostHog | no |
+
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are **required** — `initSupabase()` throws at startup if either is missing. The web app will not load until both are set and a redeploy is triggered.
 
 Trigger a manual redeploy after saving.
 

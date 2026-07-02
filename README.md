@@ -76,6 +76,17 @@ pnpm --filter mobile start
 
 ### Environment variables
 
+These four Supabase vars are **required** — the app throws a startup error if any are missing or empty:
+
+| Variable | Used by |
+|---|---|
+| `VITE_SUPABASE_URL` | Web (Vite) |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Web (Vite) |
+| `EXPO_PUBLIC_SUPABASE_URL` | Mobile (Expo) |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Mobile (Expo) |
+
+`initSupabase()` in `@constellation/api` validates these at startup and throws a descriptive error naming any missing var — the app will not boot without them.
+
 `.env.local` — local Supabase CLI (never committed). Copy from `.env.local.example` and fill in the values from `supabase status`:
 ```
 VITE_SUPABASE_URL=http://localhost:54321
@@ -84,12 +95,12 @@ EXPO_PUBLIC_SUPABASE_URL=http://localhost:54321
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<from supabase status>
 ```
 
-`.env.production` — production Supabase project (never committed):
+`.env.production` — production Supabase instance (never committed). For self-hosted (https://constellation.db.harebrained-apps.com):
 ```
-VITE_SUPABASE_URL=<your project URL>
-VITE_SUPABASE_PUBLISHABLE_KEY=<sb_publishable_xxx>
-EXPO_PUBLIC_SUPABASE_URL=<your project URL>
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<sb_publishable_xxx>
+VITE_SUPABASE_URL=https://constellation.db.harebrained-apps.com
+VITE_SUPABASE_PUBLISHABLE_KEY=<anon key>
+EXPO_PUBLIC_SUPABASE_URL=https://constellation.db.harebrained-apps.com
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<anon key>
 ```
 
 ## Deploying
@@ -111,12 +122,12 @@ The web app (`apps/web`) deploys automatically to Vercel on every push to `main`
 **Initial Vercel setup:**
 
 1. Import the repo in Vercel. Set the **Root Directory** to `apps/web` and the **Framework Preset** to `Vite`.
-2. Under **Settings → Environment Variables**, add the following for the `Production` environment:
+2. Under **Settings → Environment Variables**, add the following for the `Production` environment (both are required — the app throws at startup if either is missing):
 
    | Variable | Value |
    |---|---|
-   | `VITE_SUPABASE_URL` | Your Supabase project URL (e.g. `https://xxxx.supabase.co`) |
-   | `VITE_SUPABASE_PUBLISHABLE_KEY` | Your publishable key (`sb_publishable_xxx` from the Supabase dashboard) |
+   | `VITE_SUPABASE_URL` | `https://constellation.db.harebrained-apps.com` |
+   | `VITE_SUPABASE_PUBLISHABLE_KEY` | anon key (from Step 1 of the initial-setup runbook, or Key Vault) |
 
 3. Trigger a redeploy after setting the variables.
 
