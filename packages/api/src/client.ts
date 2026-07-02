@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import type { SupabaseClientOptions } from "@supabase/supabase-js";
+import { validateSupabaseConfig } from "./config";
 
 let _client: SupabaseClient | null = null;
 
@@ -15,6 +16,7 @@ export function initSupabase(
   publishableKey: string,
   options?: SupabaseClientOptions<"public">
 ): void {
+  validateSupabaseConfig(url, publishableKey);
   _client = createClient(url, publishableKey, options);
 }
 

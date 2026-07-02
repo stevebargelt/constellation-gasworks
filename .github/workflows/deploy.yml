@@ -11,9 +11,6 @@ jobs:
   eas-build-production:
     name: EAS Build (production)
     runs-on: ubuntu-latest
-    # iOS credentials require interactive setup (eas build --platform ios locally).
-    # continue-on-error until that's done so deploys don't block.
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,6 +36,14 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      - name: Write ASC API key
+        run: |
+          echo "${{ secrets.EXPO_ASC_API_KEY_BASE64 }}" | base64 -d > "$RUNNER_TEMP/asc_api_key.p8"
+
       - name: EAS Build (production)
         working-directory: apps/mobile
         run: eas build --platform all --profile production --non-interactive
+        env:
+          EXPO_ASC_API_KEY_PATH: ${{ runner.temp }}/asc_api_key.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.EXPO_ASC_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.EXPO_ASC_ISSUER_ID }}
